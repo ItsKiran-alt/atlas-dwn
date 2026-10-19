@@ -57,7 +57,7 @@ def urllib_transport(url: str, headers: dict, timeout: float) -> Response:
 
 class Fetcher:
     def __init__(self, transport=urllib_transport, sleep=time.sleep, clock=time.monotonic,
-                 retries: int | None = None, timeout: float | None = None, min_interval_s: float = 1.0, hosts=None):
+                 retries: int | None = None, timeout: float | None = None, min_interval_s: float = 0.4, hosts=None):
         self.transport, self.sleep, self.clock = transport, sleep, clock
         self.retries = config.HTTP_RETRIES if retries is None else retries
         self.timeout = config.HTTP_TIMEOUT_S if timeout is None else timeout

@@ -5,6 +5,7 @@ There is deliberately no function here that places an order, moves money or send
 from __future__ import annotations
 
 import csv
+from datetime import timedelta
 import io
 
 from . import config, seed
@@ -26,17 +27,23 @@ class Denied(PermissionError):
 # ---------------- authorisation ----------------
 def clients_for(repo: Repo, user: User, for_scheduling: bool = False) -> list[Client]:
     """Scoping happens in SQL: an RM never loads another RM's rows, a client never loads another client's row."""
+    return repo.cached(("clients_for", user.role, user.rm_id, user.client_id, for_scheduling), lambda: _clients_for(repo, user, for_scheduling))
+
+
+def _clients_for(repo: Repo, user: User, for_scheduling: bool) -> list[Client]:
+    out: list[Client] = []
     if user.role == "Admin":
-        return repo.list_clients(include_all=True)
-    if user.role == "RM":
+        out = repo.list_clients(include_all=True)
+    elif user.role == "RM":
         if for_scheduling and repo.get_perms(user.rm_id)["all_clients"]:
-            return repo.list_clients(include_all=True)
-        own = repo.list_clients(rm_id=user.rm_id)
-        extra = [i for i in repo.second_approver_client_ids(user.rm_id) if i not in {c.id for c in own}]
-        return own + repo.list_clients_by_ids(extra)                     # Tier 3 cases routed to this RM as second approver
-    if user.role == "Client":
-        return repo.list_clients(client_id=user.client_id)
-    return []
+            out = repo.list_clients(include_all=True)
+        else:
+            own = repo.list_clients(rm_id=user.rm_id)
+            extra = [i for i in repo.second_approver_client_ids(user.rm_id) if i not in {c.id for c in own}]
+            out = own + repo.list_clients_by_ids(extra)                  # Tier 3 cases routed to this RM as second approver
+    elif user.role == "Client":
+        out = repo.list_clients(client_id=user.client_id)
+    return out
 
 
 def get_client(repo: Repo, user: User, client_id: str) -> Client:
@@ -359,6 +366,35 @@ def run_now(repo: Repo, user: User, cfg: dict) -> str:
     return f"Run {r.status}: {r.message}. Drafts are waiting in the RM queue; nothing was approved, traded or sent."
 
 
+def validate_schedule_cfg(repo: Repo, user: User, cfg: dict) -> dict:
+    """Public wrapper so the UI can reject a bad Run now request before starting the background job."""
+    return _validated_cfg(repo, user, cfg)
+
+
+def run_all(repo: Repo, user: User) -> str:
+    """Run the monitoring agents for every client the RM can see, one after another. Each client is isolated: one failure never stops the rest."""
+    require_role(user, "RM")
+    from .agents.llm import make_llm
+    from .agents.orchestrator import run_monitoring
+    note = ""
+    if external_data_is_stale(repo):
+        repo.s.commit()
+        note = " " + refresh_external_data(repo, user)
+    llm = make_llm()
+    counts = dict(completed=0, paused=0, failed=0, duplicate=0)
+    for c in clients_for(repo, user):
+        try:
+            r = run_monitoring(repo, user, c.id, trigger="manual", llm=llm)
+            counts[r.status if r.status in counts else "failed"] += 1
+        except Exception:
+            repo.s.rollback()
+            counts["failed"] += 1
+        repo.s.commit()
+    total = sum(counts.values())
+    return (f"Analysis finished for {total} clients: {counts['completed'] + counts['duplicate']} analysed, {counts['paused']} paused (no consent), {counts['failed']} failed. "
+            "Open AI Insights to review the recommendations." + note)
+
+
 def scheduler_view(repo: Repo, user: User, cfg: dict | None) -> dict:
     from .scheduler.slots import describe, next_slot
     jobs = repo.list_jobs(None if user.role == "Admin" else user.email, 6)
@@ -407,6 +443,78 @@ def review_report(repo: Repo, user: User, client_id: str, template: str) -> str:
     return "\n".join(lines)
 
 
+def build_report(repo: Repo, user: User, kind: str, client_id: str | None = None) -> dict:
+    """Portfolio-wide and client reports built from stored records. RBAC: RMs get their own clients, Admins all.
+    A client without consent is shown as paused inside the report instead of failing the whole report."""
+    require_role(user, "RM", "Admin")
+    from . import reports
+    if kind == "client_review":
+        c = get_client(repo, user, client_id or "")
+        return reports.client_review(reports.Ctx(repo, [c]), c)
+    if kind not in reports.BUILDERS:
+        raise ValueError("Unknown report.")
+    return reports.BUILDERS[kind](reports.Ctx(repo, clients_for(repo, user)))
+
+
+MSG_MAX_CHARS = 2000
+MSG_PER_HOUR = 20
+
+
+def send_message(repo: Repo, user: User, body: str, client_id: str | None = None):
+    """Secure client <-> RM message. A client writes only to their own RM; an RM only to their assigned clients (server-checked).
+    Plain text, length-capped and rate-limited. The text is NOT copied into the audit log (only the fact that a message was sent).
+    Chatting is not AI processing, so it stays available even if monitoring consent was withdrawn."""
+    body = (body or "").replace("\r\n", "\n").strip()
+    if not body:
+        raise ValueError("Please type a message first.")
+    if len(body) > MSG_MAX_CHARS:
+        raise ValueError(f"Messages are limited to {MSG_MAX_CHARS} characters.")
+    if user.role == "Client":
+        c = get_client(repo, user, user.client_id)
+        role = "Client"
+    elif user.role == "RM":
+        c = get_client(repo, user, client_id or "")
+        role = "RM"
+    else:
+        raise Denied("Only clients and their relationship manager can use secure messages.")
+    if repo.count_messages_since(c.id, role, utcnow() - timedelta(hours=1)) >= MSG_PER_HOUR:
+        raise ValueError("You are sending messages very quickly. Please wait a little before sending more.")
+    repo.add_message(c.id, c.rm_id, role, user.name, body)
+    repo.log(c.name, "Secure message sent", user.name, f"{role} message ({len(body)} characters; content not logged)", "Logged", role, client_id=c.id)
+
+
+def draft_reply(repo: Repo, user: User, client_id: str) -> tuple[str, str]:
+    """AI-assisted DRAFT of a reply to the client's latest message. Returns (text, provider note). Nothing is sent: the RM edits and sends.
+    This is AI processing of the client's data, so the monitoring-consent gate applies."""
+    require_role(user, "RM")
+    c = get_client(repo, user, client_id)
+    require_monitoring_consent(repo, c)
+    msgs = repo.messages_for(c.id, 12)
+    last = next((m for m in reversed(msgs) if m["role"] == "Client"), None)
+    if last is None:
+        raise ValueError("There is no client message to reply to yet.")
+    from .agents.llm import make_llm
+    from .agents.skills import ChatReplyDrafter, run_skill
+    k, d = headline_drift(c.weights, c.plan)
+    recs = {"allocation": (f"{c.name}'s {CLASS_LABEL[k].lower()} weight is {c.weights[k]}% against a {c.plan[k]}% plan ({d:+g} points)." if abs(d) >= 0.5
+                           else f"No allocation class differs from plan by 0.5 points or more for {c.name}.")}
+    for i, g in enumerate(c.goals):
+        recs[f"goal{i + 1}"] = f"Goal {g.name}: {g.detail}; about {g.progress}% on track (illustrative)."
+    rm = next((r.name for r in repo.list_rms() if r.id == c.rm_id), user.name)
+    r = run_skill(ChatReplyDrafter(), make_llm(), {"client_message": last["body"][:1500], "records": recs, "first_name": c.name.split(" ")[0], "rm_name": rm})
+    repo.log(c.name, "AI reply draft created", user.name, f"{'template' if r.used_fallback else r.provider}; draft only, not sent", "Logged", "RM", client_id=c.id)
+    return r.output.reply, ("a template (no AI service connected)" if r.used_fallback else f"{r.provider} ({r.model})")
+
+
+def mark_thread_read(repo: Repo, user: User, client_id: str | None = None):
+    """The reader opens the thread: mark the OTHER party's messages as read."""
+    if user.role == "Client":
+        repo.mark_messages_read(user.client_id, "RM")
+    elif user.role == "RM":
+        c = get_client(repo, user, client_id or "")
+        repo.mark_messages_read(c.id, "Client")
+
+
 # ---------------- external market and news data ----------------
 def _fetcher_factory() -> Fetcher:           # tests replace this with a mock transport
     return Fetcher()
@@ -422,14 +530,18 @@ def refresh_external_data(repo: Repo, user: User, force: bool = False) -> str:
     fetcher = _fetcher_factory()
     m = MarketService(repo, fetcher).refresh(force=force)
     n = NewsService(repo, fetcher).refresh(force=force)
+    from .data.history import HistoryService
+    h = HistoryService(repo, fetcher).refresh(force=force)
     parts = [f"prices ok {len(m['ok'])}/{len(m['ok']) + len(m['failed'])}", f"new headlines {n['new']}"]
+    if h["failed"]:
+        parts.append("history failures: " + "; ".join(f"{k} ({v[:50]})" for k, v in list(h["failed"].items())[:2]))
     if m["failed"]:
         parts.append("price failures: " + "; ".join(f"{k} ({v[:60]})" for k, v in list(m["failed"].items())[:3]))
     if n["failed"]:
         parts.append("feed failures: " + ", ".join(n["failed"]))
     if n["quarantined"]:
         parts.append(f"{n['quarantined']} item(s) quarantined")
-    problems = bool(m["failed"] or n["failed"])
+    problems = bool(m["failed"] or n["failed"] or h["failed"])
     repo.log("—", "External data refresh", user.name, " · ".join(parts), "Review" if problems else "Logged", "System")
     if problems:
         return "Refresh finished with problems: " + " · ".join(parts[2:]) + ". Last successful data is shown with its age."
@@ -438,7 +550,10 @@ def refresh_external_data(repo: Repo, user: User, force: bool = False) -> str:
 
 def external_data_is_stale(repo: Repo) -> bool:
     q = repo.latest_quote("^GSPC")
-    return q is None or (utcnow() - q.retrieved_at).total_seconds() > config.MARKET_CACHE_TTL_S * 5
+    if q is None or (utcnow() - q.retrieved_at).total_seconds() > config.MARKET_CACHE_TTL_S * 5:
+        return True
+    from .data.history import HistoryService
+    return HistoryService(repo).is_stale()
 
 
 # ---------------- agent runs and the human approval workflow ----------------

@@ -23,6 +23,7 @@ from dwn import bootstrap, security              # noqa: E402
 from dwn.db import session as dbsession          # noqa: E402
 from dwn.repo import Repo                        # noqa: E402
 
+os.environ.setdefault("DWN_ASYNC_JOBS", "0")          # background threads are covered by their own tests
 PG_ADMIN = os.environ.get("DWN_TEST_PG_ADMIN_URL", "")
 IS_PG = bool(PG_ADMIN)
 sqlite_only = pytest.mark.skipif(IS_PG, reason="uses SQLite files directly")

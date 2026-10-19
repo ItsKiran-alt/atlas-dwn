@@ -201,9 +201,11 @@ class MarketService:
         """Latest stored quotes with freshness recomputed NOW. Missing data is reported as unavailable, never filled in."""
         now = self.clock()
         rows = []
-        for sym in symbols or list(WATCHLIST):
+        syms = symbols or list(WATCHLIST)
+        stored = self.repo.latest_quotes(syms)
+        for sym in syms:
             name, kind = WATCHLIST[sym]
-            q = self.repo.latest_quote(sym)
+            q = stored.get(sym)
             if q is None:
                 rows.append(dict(symbol=sym, name=name, kind=kind, available=False, freshness="unavailable", message="No data retrieved yet."))
                 continue

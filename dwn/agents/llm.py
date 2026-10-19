@@ -182,8 +182,34 @@ class ScriptedLLM:
         return LLMResult(r, self.name, self.model, 0)
 
 
+def chosen_provider(explicit: str | None = None) -> str:
+    """DWN_LLM_PROVIDER wins when set. Otherwise the provider is inferred from which free API key is present, so adding
+    GROQ_API_KEY to the secrets is enough to switch the AI on. No key = deterministic templates (no AI)."""
+    p = (explicit or os.environ.get("DWN_LLM_PROVIDER", "")).strip().lower()
+    if p:
+        return p
+    if os.environ.get("GROQ_API_KEY"):
+        return "groq"
+    if os.environ.get("GEMINI_API_KEY"):
+        return "gemini"
+    return "template"
+
+
+def llm_status() -> dict:
+    """What the UI shows: which provider answers, whether it is live, and the model. Never exposes a key."""
+    p = chosen_provider()
+    if p == "groq":
+        live = bool(os.environ.get("GROQ_API_KEY"))
+        return dict(provider="groq", live=live, model=os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b") if live else "",
+                    text="Groq AI is connected" if live else "Groq is selected but GROQ_API_KEY is missing; using templates")
+    if p == "gemini":
+        live = bool(os.environ.get("GEMINI_API_KEY"))
+        return dict(provider="gemini", live=live, model="", text="Gemini AI is connected" if live else "Gemini is selected but GEMINI_API_KEY is missing; using templates")
+    return dict(provider="template", live=False, model="", text="Rule-based templates (no AI service connected)")
+
+
 def make_llm(provider: str | None = None, transport: Transport = urllib_post):
-    provider = (provider or os.environ.get("DWN_LLM_PROVIDER", "template")).lower()
+    provider = chosen_provider(provider)
     if provider == "groq":
         return GroqLLM(transport=transport)
     if provider == "gemini":

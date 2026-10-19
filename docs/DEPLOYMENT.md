@@ -92,6 +92,14 @@ Streamlit cannot run background jobs, so a GitHub Action is the clock.
 No key is needed for Yahoo Finance, Federal Reserve, SEC or BLS data.
 **Where "locally" means:** copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml` (git-ignored) or set environment variables. To enable a model in the app: sign in as Admin → Settings & Scheduler → Agent data sources → add the Groq or Gemini source.
 
+## 6b. Turn on the AI (Groq), step by step
+Atlas works without any AI (deterministic templates). Groq adds natural-language drafting. It is used for: the **Ask Atlas AI** copilot, recommendation notes and client-message drafts, news-event interpretation, adviser-note extraction, and the **Draft a reply with AI** button in Messages. Every AI output is checked (grounded in stored records, no promises or untraceable numbers) and falls back to a template if rejected. **An RM always approves; the AI never trades or sends anything.**
+1. Create a free key at console.groq.com → **API Keys**.
+2. Streamlit Community Cloud → your app → **Settings → Secrets**: add `GROQ_API_KEY = "your-key"` (nothing else is needed). Save; the app restarts.
+3. Optional, for the scheduler: GitHub repo → Settings → Secrets and variables → Actions → add the same `GROQ_API_KEY`.
+4. Open **Ask Atlas AI**: the footer now says *AI-assisted (groq)*. Without the key it says *Rule-based*.
+Use synthetic data only while on a free tier (providers may use free-tier inputs to improve their products).
+
 ## 7. Check that it works (10-minute checklist)
 1. **Real data:** Research & Market shows prices with a source link, a time and a status; headlines link to federalreserve.gov / sec.gov / bls.gov.
 2. **Roles:** (a) RM: Priya sees 24 clients, no Admin panel. (b) Admin: sees only Compliance View and Settings. (c) Client: `ramesh.agarwal@atlas-demo.com` sees only his own portfolio. (d) As Priya, try opening Ramesh: impossible; there is no way to reach him.
@@ -111,12 +119,15 @@ No key is needed for Yahoo Finance, Federal Reserve, SEC or BLS data.
 | `connection refused` / `Network is unreachable` to Supabase | You used the **direct** connection (IPv6). Use the **Session pooler** string. |
 | `password authentication failed` | Wrong or un-encoded password; reset it in Supabase → Project Settings → Database. |
 | Too many connections | The app keeps a small pool (3+2); close other tools using the database or restart the app. |
+| Research shows `FetchError: HTTP 403` for BLS | BLS rejects requests without a contact. Add `DWN_CONTACT = "your-own-email"` to the Streamlit secrets (your own address; it is sent only in the User-Agent of outbound data requests). |
 | Research page says "Unavailable" or "Stale" | The provider is down or blocked from your host. Admin → Settings → data sources shows the real error. Not a bug: the app refuses to show unverified prices. |
 | Login says "Too many failed attempts" | Account locked for 15 minutes after 5 bad passwords. |
 | GitHub Action red: `DATABASE_URL` empty | Secret not set in **Actions** secrets (Streamlit secrets are separate). |
 | GitHub Action never runs | Workflows disabled, not on the default branch, or a public repo idle for 60 days. |
 | Scheduled job status "missed" | No worker ran within 6 hours of the slot; by design it is recorded, not run late. |
 | LLM calls "not configured" | Key or `DWN_LLM_PROVIDER` missing, or the source is disabled in Settings. The agent then uses templates (still works). |
+| Page feels slow / goes grey | Pick the Supabase region closest to Streamlit Community Cloud (US East is the usual match); every page build makes about 30 database round trips, so distance matters. |
+| Run now seems to do nothing | It runs in the background: a toast says it started, the progress bar at the top shows it is working, Job history fills in, and a toast announces the result. Only one run at a time. |
 | Page is blank after deploy | Hard-refresh; check the browser console; the app needs the component folder `ui_component/` in the repo. |
 
 ## 9. Backup and recovery (manual)

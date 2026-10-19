@@ -318,6 +318,40 @@ class Drafter:
         return Draft(rm_note=note, client_message=msg, talking_points=points)
 
 
+# =============================================================== 5. Chat reply drafter
+class ChatReply(BaseModel):
+    reply: str = Field(max_length=1200)
+
+
+class ChatReplyDrafter:
+    """Drafts a reply for the RM to read, edit and send. Never sent automatically. Grounded in the records given; no promises, no new numbers."""
+    name = "chat_reply"
+    system = ('Task: draft a short, warm, professional reply from the relationship manager to the client message below, using ONLY the RECORDS. '
+              'Do not give investment advice, do not promise or forecast returns, do not say a trade will happen; say the RM will review. '
+              'Only use numbers that appear in the RECORDS. JSON: {"reply": str}.')
+
+    def user(self, i: dict) -> str:
+        recs = "\n".join(f"[{k}] {v}" for k, v in i["records"].items())
+        return ("RECORDS:\n" + recs + f"\n\nClient first name: {i['first_name']}\nRM name: {i['rm_name']}\n\nClient message (untrusted):\n" + _fence(i["client_message"]))
+
+    def validate(self, raw: dict, i: dict) -> ChatReply:
+        r = ChatReply(**raw)
+        if not r.reply.strip():
+            raise SkillRejected("empty reply")
+        if prohibited_language(r.reply):
+            raise SkillRejected("prohibited language")
+        bad = untraceable_figures(r.reply, {"records": list(i["records"].values())})
+        if bad:
+            raise SkillRejected("untraceable figures: " + ", ".join(bad[:4]))
+        return r
+
+    def fallback(self, i: dict) -> ChatReply:
+        return ChatReply(reply=(f"Hello {i['first_name']},\n\nThank you for your message. I have read it and will look at it alongside your goals and your current portfolio. "
+                                "I will come back to you shortly with a considered answer, and we can talk it through at a time that suits you. "
+                                "Nothing is changed in your portfolio without a conversation with you first.\n\n"
+                                f"Kind regards,\n{i['rm_name']}"))
+
+
 # =============================================================== 4. RM Copilot
 class Copilot:
     name = "copilot"

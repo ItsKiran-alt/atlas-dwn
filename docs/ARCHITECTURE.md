@@ -82,7 +82,16 @@ sequenceDiagram
 ```
 
 ## 5. Data model (main tables)
-`users · rms · rm_permissions · clients · client_profiles · goals · holdings · transactions · consents · audit_events (append-only) · recommendations · proposals · approvals · agent_runs · run_steps · evidence_items · adviser_notes · client_message_drafts · schedules · schedule_runs · job_runs · job_run_items · job_locks · data_sources · market_quotes · news_items · policy_settings`. Migrations: `alembic/versions/0001…0004`.
+`users · rms · rm_permissions · clients · client_profiles · goals · holdings · transactions · consents · audit_events (append-only) · recommendations · proposals · approvals · agent_runs · run_steps · evidence_items · adviser_notes · client_message_drafts · schedules · schedule_runs · job_runs · job_run_items · job_locks · data_sources · market_quotes · news_items · price_history · messages · policy_settings`. Migrations: `alembic/versions/0001…0005`.
+
+### Added in the fix batch
+- **Background runs:** Run now (scheduler, per client, all clients) starts a worker thread with its own database session (`controller._start_bg`); the page polls every ~2.5 s while it runs and a toast reports the result. `DWN_ASYNC_JOBS=0` runs inline (tests).
+- **Fewer round trips:** consent, proposals, permissions, quotes and clients are fetched in batches, and a read-phase memo avoids repeats while a page is built (about 85 → 28 queries for an RM).
+- **Performance charts:** `data/history.py` stores weekly SPY/AGG/VNQ closes; `engines/performance.py` replays a client's current mix on that history against a 60/40 benchmark. It is labelled an estimate from market proxies, never an actual return; without history it shows "not available".
+- **Charts** are server-rendered SVG (`ui/charts.py`): allocation donut, current vs target, drift vs range, goal outlook, estimated return.
+- **Reports** (`reports.py`): portfolio review, AI recommendation rationale, approvals and audit, consent status, data freshness, client review; view in a dialog, download as HTML or CSV.
+- **Messages:** client ↔ RM chat in the `messages` table (`services.send_message`), RM Messages page with unread counts, optional AI reply drafting (`ChatReplyDrafter` skill).
+- **LLM selection:** `agents/llm.chosen_provider()` uses `DWN_LLM_PROVIDER` if set, otherwise whichever of `GROQ_API_KEY` / `GEMINI_API_KEY` exists, otherwise templates.
 
 ## 6. Mapping to the 10 agents in the build prompt
 See the table in [docs/05_phase5_agent.md](05_phase5_agent.md): most "agents" are deterministic services on purpose; only four skills use a language model.

@@ -69,6 +69,11 @@ JOB_GRACE_HOURS = int(os.environ.get("DWN_JOB_GRACE_HOURS", "6"))               
 JOB_MAX_ATTEMPTS = int(os.environ.get("DWN_JOB_MAX_ATTEMPTS", "3"))
 
 
+def async_jobs() -> bool:
+    """Run Now / agent runs execute in a background thread so the page never freezes (default on). Tests set DWN_ASYNC_JOBS=0 to run inline."""
+    return os.environ.get("DWN_ASYNC_JOBS", "1") != "0"
+
+
 def validate_production() -> None:
     """Refuse to start in production with unsafe settings (called from bootstrap.init)."""
     if not IS_PROD:

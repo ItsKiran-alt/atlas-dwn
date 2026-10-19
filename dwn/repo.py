@@ -20,6 +20,18 @@ from .domain import RM, AuditEvent, Client, Goal, Rec, User, fmt_ts, utcnow
 class Repo:
     def __init__(self, session: Session):
         self.s = session
+        self.memo: dict = {}                     # read-phase cache (each avoided query is a network hop on a hosted DB)
+        self.memoize = False                     # on ONLY while a page is being built (no writes happen then), so writes never see stale lookups
+
+    def clear_memo(self):
+        self.memo.clear()
+
+    def cached(self, key, fn):
+        if not self.memoize:
+            return fn()
+        if key not in self.memo:
+            self.memo[key] = fn()
+        return self.memo[key]
 
     # ---------------- users ----------------
     def get_user(self, email: str) -> User | None:
@@ -64,7 +76,7 @@ class Repo:
 
     # ---------------- RMs & permissions ----------------
     def list_rms(self) -> list[RM]:
-        return [RM(r.id, r.name, r.email, r.initials) for r in self.s.scalars(select(M.RMRow).order_by(M.RMRow.name.desc()))]
+        return self.cached("rms", lambda: [RM(r.id, r.name, r.email, r.initials) for r in self.s.scalars(select(M.RMRow).order_by(M.RMRow.name.desc()))])
 
     def add_rm(self, rm: RM):
         self.s.add(M.RMRow(id=rm.id, name=rm.name, email=rm.email, initials=rm.initials))
@@ -72,11 +84,12 @@ class Repo:
         self.s.add(M.RMPermissionRow(rm_id=rm.id))
         self.s.flush()
 
+    def all_perms(self) -> dict:
+        return self.cached("perms", lambda: {r.rm_id: dict(schedule=r.schedule, all_clients=r.all_clients, approval=r.approval, override=r.override)
+                                             for r in self.s.scalars(select(M.RMPermissionRow))})
+
     def get_perms(self, rm_id: str) -> dict:
-        r = self.s.get(M.RMPermissionRow, rm_id)
-        if not r:
-            return dict(schedule=False, all_clients=False, approval="Tier 1", override=False)
-        return dict(schedule=r.schedule, all_clients=r.all_clients, approval=r.approval, override=r.override)
+        return dict(self.all_perms().get(rm_id) or dict(schedule=False, all_clients=False, approval="Tier 1", override=False))
 
     def set_perms(self, rm_id: str, schedule: bool, all_clients: bool, approval: str, override: bool):
         r = self.s.get(M.RMPermissionRow, rm_id) or M.RMPermissionRow(rm_id=rm_id)
@@ -85,10 +98,14 @@ class Repo:
         self.s.flush()
 
     # ---------------- clients ----------------
-    def list_clients(self, rm_id: str | None = None, client_id: str | None = None, include_all: bool = False) -> list[Client]:
+    def list_clients(self, rm_id: str | None = None, client_id: str | None = None, include_all: bool = False, ids: list[str] | None = None) -> list[Client]:
         """SQL-level scoping: RM sees only rows with their rm_id; a client only their own row."""
         q = select(M.ClientRow)
-        if client_id is not None:
+        if ids is not None:
+            if not ids:
+                return []
+            q = q.where(M.ClientRow.id.in_(ids))
+        elif client_id is not None:
             q = q.where(M.ClientRow.id == client_id)
         elif rm_id is not None:
             q = q.where(M.ClientRow.rm_id == rm_id)
@@ -148,6 +165,13 @@ class Repo:
     def has_active_consent(self, client_id: str) -> bool:
         return self.s.scalar(select(func.count()).select_from(M.ConsentRow).where(
             M.ConsentRow.client_id == client_id, M.ConsentRow.withdrawn_at.is_(None))) > 0
+
+    def consent_map(self, client_ids: list[str]) -> dict[str, bool]:
+        """One query for many clients (was one per client)."""
+        if not client_ids:
+            return {}
+        active = set(self.s.scalars(select(M.ConsentRow.client_id).where(M.ConsentRow.client_id.in_(client_ids), M.ConsentRow.withdrawn_at.is_(None))))
+        return {i: i in active for i in client_ids}
 
     def consent_info(self, client_id: str) -> dict | None:
         r = self.s.scalar(select(M.ConsentRow).where(M.ConsentRow.client_id == client_id).order_by(M.ConsentRow.id.desc()))
@@ -306,6 +330,15 @@ class Repo:
         self.s.add(M.MarketQuoteRow(**q.model_dump()))
         self.s.flush()
 
+    def latest_quotes(self, symbols: list[str]) -> dict:
+        """Latest stored quote per symbol in ONE query."""
+        from .data.models import MarketQuote
+        newest = select(func.max(M.MarketQuoteRow.id)).where(M.MarketQuoteRow.symbol.in_(symbols)).group_by(M.MarketQuoteRow.symbol)
+        out = {}
+        for r in self.s.scalars(select(M.MarketQuoteRow).where(M.MarketQuoteRow.id.in_(newest))):
+            out[r.symbol] = MarketQuote(**{c.name: getattr(r, c.name) for c in M.MarketQuoteRow.__table__.columns if c.name != "id"})
+        return out
+
     def latest_quote(self, symbol: str):
         from .data.models import MarketQuote
         r = self.s.scalar(select(M.MarketQuoteRow).where(M.MarketQuoteRow.symbol == symbol).order_by(M.MarketQuoteRow.retrieved_at.desc(), M.MarketQuoteRow.id.desc()))
@@ -435,6 +468,17 @@ class Repo:
         r = self.s.scalar(select(M.ProposalRow).where(M.ProposalRow.client_id == client_id, M.ProposalRow.status != "superseded").order_by(M.ProposalRow.created_at.desc(), M.ProposalRow.id.desc()))
         return self._prop(r) if r else None
 
+    def latest_proposals(self, client_ids: list[str]) -> dict[str, dict | None]:
+        """Latest non-superseded proposal per client, in one query."""
+        out: dict[str, dict | None] = {i: None for i in client_ids}
+        if not client_ids:
+            return out
+        q = select(M.ProposalRow).where(M.ProposalRow.client_id.in_(client_ids), M.ProposalRow.status != "superseded").order_by(M.ProposalRow.created_at.desc(), M.ProposalRow.id.desc())
+        for r in self.s.scalars(q):
+            if out[r.client_id] is None:
+                out[r.client_id] = self._prop(r)
+        return out
+
     def get_proposal(self, pid: str) -> dict | None:
         r = self.s.get(M.ProposalRow, pid)
         return self._prop(r) if r else None
@@ -457,10 +501,7 @@ class Repo:
         return list(self.s.scalars(select(M.ProposalRow.client_id).where(M.ProposalRow.status == "awaiting_second", M.ProposalRow.second_approver_rm_id == rm_id)))
 
     def list_clients_by_ids(self, ids: list[str]):
-        out = []
-        for i in ids:
-            out += self.list_clients(client_id=i)
-        return out
+        return self.list_clients(ids=ids)
 
     # ---------------- scheduler: schedules, jobs, locks ----------------
     def list_schedules(self) -> list[dict]:
@@ -537,3 +578,59 @@ class Repo:
         if owner_email:
             q = q.where(M.JobRunRow.owner_email == owner_email)
         return [self._job(r) for r in self.s.scalars(q)]
+
+    # ---------------- price history (performance charts) ----------------
+    def save_history(self, symbol: str, bars: list[tuple], provider: str, now: datetime) -> int:
+        """Upsert weekly closes [(date, close)]. Returns how many rows were new or changed."""
+        have = {r.day: r for r in self.s.scalars(select(M.PriceHistoryRow).where(M.PriceHistoryRow.symbol == symbol))}
+        n = 0
+        for day, close in bars:
+            r = have.get(day)
+            if r is None:
+                self.s.add(M.PriceHistoryRow(symbol=symbol, day=day, close=float(close), provider=provider, retrieved_at=now)); n += 1
+            elif abs(r.close - close) > 1e-9:
+                r.close, r.retrieved_at = float(close), now; n += 1
+        self.s.flush()
+        return n
+
+    def history(self, symbols: list[str]) -> dict[str, list[tuple]]:
+        out: dict[str, list[tuple]] = {s: [] for s in symbols}
+        q = select(M.PriceHistoryRow.symbol, M.PriceHistoryRow.day, M.PriceHistoryRow.close).where(M.PriceHistoryRow.symbol.in_(symbols)).order_by(M.PriceHistoryRow.day)
+        for sym, day, close in self.s.execute(q):
+            out[sym].append((day, close))
+        return out
+
+    def history_retrieved_at(self, symbol: str):
+        return self.s.scalar(select(func.max(M.PriceHistoryRow.retrieved_at)).where(M.PriceHistoryRow.symbol == symbol))
+
+    # ---------------- client <-> RM messages ----------------
+    def add_message(self, client_id: str, rm_id: str, sender_role: str, sender_name: str, body: str):
+        self.s.add(M.MessageRow(client_id=client_id, rm_id=rm_id, sender_role=sender_role, sender_name=sender_name, body=body, created_at=utcnow()))
+        self.s.flush()
+
+    def messages_for(self, client_id: str, limit: int = 80) -> list[dict]:
+        rows = list(self.s.scalars(select(M.MessageRow).where(M.MessageRow.client_id == client_id).order_by(M.MessageRow.id.desc()).limit(limit)))
+        return [dict(id=m.id, role=m.sender_role, name=m.sender_name, body=m.body, at=m.created_at, read=m.read_at is not None) for m in reversed(rows)]
+
+    def recent_message_stats(self, client_ids: list[str]) -> dict[str, dict]:
+        """Per client: unread messages FROM the client, and the latest message time. One query."""
+        out: dict[str, dict] = {i: dict(unread=0, last=None, last_role="") for i in client_ids}
+        if not client_ids:
+            return out
+        q = select(M.MessageRow.client_id, M.MessageRow.sender_role, M.MessageRow.created_at, M.MessageRow.read_at).where(M.MessageRow.client_id.in_(client_ids)).order_by(M.MessageRow.id)
+        for cid, role, at, read in self.s.execute(q):
+            o = out[cid]
+            o["last"], o["last_role"] = at, role
+            if role == "Client" and read is None:
+                o["unread"] += 1
+        return out
+
+    def mark_messages_read(self, client_id: str, sender_role: str):
+        """Mark messages sent BY sender_role as read (the other party opened the conversation)."""
+        now = utcnow()
+        for m in self.s.scalars(select(M.MessageRow).where(M.MessageRow.client_id == client_id, M.MessageRow.sender_role == sender_role, M.MessageRow.read_at.is_(None))):
+            m.read_at = now
+        self.s.flush()
+
+    def count_messages_since(self, client_id: str, sender_role: str, since: datetime) -> int:
+        return self.s.scalar(select(func.count()).select_from(M.MessageRow).where(M.MessageRow.client_id == client_id, M.MessageRow.sender_role == sender_role, M.MessageRow.created_at >= since)) or 0

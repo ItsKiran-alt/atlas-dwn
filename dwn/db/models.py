@@ -1,9 +1,9 @@
 """SQLAlchemy models. Schema changes go through Alembic migrations (alembic/versions)."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -372,3 +372,28 @@ class JobLockRow(Base):
     holder: Mapped[str] = mapped_column(String(80))
     acquired_at: Mapped[datetime] = mapped_column(DateTime)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class PriceHistoryRow(Base):
+    """Weekly closes of the market proxies (SPY, AGG, VNQ), used ONLY for the estimated-performance charts. Never contains fabricated values."""
+    __tablename__ = "price_history"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(20), index=True)
+    day: Mapped[date] = mapped_column(Date)
+    close: Mapped[float] = mapped_column(Float)
+    provider: Mapped[str] = mapped_column(String(20))
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime)
+    __table_args__ = (UniqueConstraint("symbol", "day", name="uq_price_symbol_day"),)
+
+
+class MessageRow(Base):
+    """Secure client <-> relationship manager messages. Plain text only; bodies are never written to the audit log."""
+    __tablename__ = "messages"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), index=True)
+    rm_id: Mapped[str] = mapped_column(String(40))
+    sender_role: Mapped[str] = mapped_column(String(10))                 # Client | RM
+    sender_name: Mapped[str] = mapped_column(String(120))
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

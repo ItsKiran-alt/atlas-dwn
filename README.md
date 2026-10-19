@@ -82,9 +82,13 @@ More diagrams (agent workflow, approval state machine, data model): [docs/ARCHIT
 | Groq / Google Gemini | LLM drafting and interpretation | API key | optional (default: no AI) |
 | Alpha Vantage | fallback prices | free API key | optional |
 
+## Latest changes (fix batch)
+Whole-page scrolling, no grey overlay while the server works, about 3x fewer database queries per page, overview numbers that match the queue (and are clickable), AI Insights with real current-vs-proposed allocation and working Review buttons, a rebuilt Reports page (view and download, all clients), **Run now** (per client, all clients, scheduler) running in the background, client dashboards with charts, client to RM secure chat plus an RM Messages page, and Groq switched on simply by adding `GROQ_API_KEY`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) section 6b.
+
 ## Honest limitations
 - **Synthetic data only.** Goal numbers for the 24 prototype clients are generated placeholders. Thresholds, assumptions and wording rules are placeholders for compliance to set.
-- **No LLM has been run live** (no key was available); the adapters are tested against fake transports only.
+- **No LLM has been run live** (no key was available); the adapters are tested against fake transports only. Add `GROQ_API_KEY` to try it.
+- Performance charts are **estimates from market proxies**, not actual account returns (no real return history exists in this prototype).
 - Verified on **SQLite** (Python 3.14 and 3.12) and on a **local PostgreSQL 17** (343 tests plus a prod-mode smoke test, see `docs/08_phase8_verification.md`). **Supabase, Streamlit Community Cloud and GitHub Actions have not been run.**
 - Yahoo Finance is an unofficial source; do not treat it as licensed market data.
 - Own password authentication only (no MFA, no email verification).

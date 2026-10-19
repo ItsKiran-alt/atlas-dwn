@@ -33,6 +33,9 @@ st.markdown("""<style>
 header[data-testid="stHeader"],div[data-testid="stToolbar"],div[data-testid="stDecoration"],footer,#MainMenu{display:none!important}
 .stApp,.block-container{padding:0!important;margin:0!important;max-width:100%!important;background:#f4f7fb}
 div[data-testid="stCustomComponentV1"],iframe[title*="atlas_ui"]{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;border:0!important;z-index:999999}
+/* never dim the UI while the server works (Streamlit fades 'stale' elements to ~33% opacity, which looked like a grey mask) */
+[data-stale="true"],[data-stale="true"] *,.stApp [data-testid="stAppViewContainer"] *{opacity:1!important;transition:none!important}
+[data-testid="stStatusWidget"]{display:none!important}
 </style>""", unsafe_allow_html=True)
 
 _component = components.declare_component("atlas_ui", path=str(Path(__file__).parent / "ui_component"))

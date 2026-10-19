@@ -11,6 +11,7 @@ from html import escape as e
 from .. import seed, services
 from ..engines.portfolio import CLASS_LABEL, headline_drift, holding_shares, money, money_m
 from ..domain import CONSENT_VERSION, User
+from . import charts
 
 Store = object          # the renderers receive a controller.ViewData snapshot
 
@@ -60,8 +61,87 @@ def client_portal(store: Store, user: User) -> str:
     tx = "".join(f'<tr><td>{d}</td><td>{k}</td><td>{e(i)}</td><td>{money(a)}</td><td><span class="pill">{s}</span></td></tr>' for d, k, i, a, s in c.transactions) or \
         '<tr><td colspan="5">No transactions available until the client account is linked.</td></tr>'
     aum = money_m(c.aum_musd) if c.aum_musd else "—"
-    ret = "+7.8%" if c.aum_musd else "—"
-    return f'''<section class="view active" id="view-clientportal" style="max-width:1100px;margin:30px auto;padding:24px"><div class="pagehead"><div><div class="eyebrow">Secure client portal</div><h1 id="portalGreeting">Welcome, {e(c.name)}</h1><div class="sub">Your portfolio and transaction history, linked to the account you signed in with.</div></div><button class="btn" onclick="logoutDemo()">Sign out</button></div><div class="metrics"><div class="metric"><div class="bubble">$</div><div><strong id="portalAum">{aum}</strong><span>Total portfolio value</span></div></div><div class="metric"><div class="bubble">↗</div><div><strong>{ret}</strong><span>Illustrative 1-year return</span></div></div><div class="metric"><div class="bubble">▤</div><div><strong>{len(c.holdings)}</strong><span>Investment holdings</span></div></div></div><div class="card" style="margin-top:16px"><div class="cardhead"><div><h2>Your portfolio</h2><div class="sub">Illustrative holdings linked to this demo client account</div></div><span class="pill">Read-only</span></div><div class="tablewrap"><table><thead><tr><th>Asset / investment</th><th>Asset class</th><th>Current value</th><th>Portfolio share</th></tr></thead><tbody id="portalHoldings">{hold}</tbody></table></div></div><div class="card" style="margin-top:16px"><div class="cardhead"><div><h2>Previous transactions</h2><div class="sub">Transaction history for the signed-in account</div></div></div><div class="tablewrap"><table><thead><tr><th>Date</th><th>Transaction</th><th>Investment</th><th>Amount</th><th>Status</th></tr></thead><tbody id="portalTransactions">{tx}</tbody></table></div><div class="footnote">All holdings and transactions shown here are fictional demo data. Records are retrieved only after a server-side identity and account-ownership check.</div></div>{_consent_card(store)}</section>{_consent_modals()}'''
+    perf = store.perf(c)
+    r1 = perf.returns.get("1Y")
+    ret = f"{r1:+.1f}%" if r1 is not None else "—"
+    return f'''<section class="view active" id="view-clientportal" style="max-width:1100px;margin:30px auto;padding:24px"><div class="pagehead"><div><div class="eyebrow">Secure client portal</div><h1 id="portalGreeting">Welcome, {e(c.name)}</h1><div class="sub">Your portfolio and transaction history, linked to the account you signed in with.</div></div><button class="btn" onclick="logoutDemo()">Sign out</button></div><div class="metrics"><div class="metric"><div class="bubble">$</div><div><strong id="portalAum">{aum}</strong><span>Total portfolio value</span></div></div><div class="metric"><div class="bubble">↗</div><div><strong>{ret}</strong><span>Estimated 1-year return (market proxies)</span></div></div><div class="metric"><div class="bubble">▤</div><div><strong>{len(c.holdings)}</strong><span>Investment holdings</span></div></div></div>{_portal_dashboard(store, c, perf)}{_chat_card(store, c, 'Client')}<div class="card" style="margin-top:16px"><div class="cardhead"><div><h2>Your portfolio</h2><div class="sub">Illustrative holdings linked to this demo client account</div></div><span class="pill">Read-only</span></div><div class="tablewrap"><table><thead><tr><th>Asset / investment</th><th>Asset class</th><th>Current value</th><th>Portfolio share</th></tr></thead><tbody id="portalHoldings">{hold}</tbody></table></div></div><div class="card" style="margin-top:16px"><div class="cardhead"><div><h2>Previous transactions</h2><div class="sub">Transaction history for the signed-in account</div></div></div><div class="tablewrap"><table><thead><tr><th>Date</th><th>Transaction</th><th>Investment</th><th>Amount</th><th>Status</th></tr></thead><tbody id="portalTransactions">{tx}</tbody></table></div><div class="footnote">All holdings and transactions shown here are fictional demo data. Records are retrieved only after a server-side identity and account-ownership check.</div></div>{_consent_card(store)}</section>{_consent_modals()}'''
+
+
+def _portal_dashboard(store, c, perf) -> str:
+    from ..engines import performance
+    band = 5.0
+    drift = performance.drift_rows(c.weights, c.plan, band)
+    worst = max(drift, key=lambda r: abs(r["gap"]))
+    if perf.available:
+        blocks = ""
+        for i, (label, wk) in enumerate(performance.WEEKS.items()):
+            if len(perf.dates) <= wk:
+                continue
+            d = perf.dates[-wk - 1:]
+            p = [v / perf.portfolio[-wk - 1] * 100 for v in perf.portfolio[-wk - 1:]]
+            b = [v / perf.benchmark[-wk - 1] * 100 for v in perf.benchmark[-wk - 1:]]
+            rp, rb = perf.returns.get(label), perf.bench_returns.get(label)
+            chart = charts.line_chart(d, [("Your mix (estimated)", p, "#245b9d"), ("60/40 benchmark", b, "#9aa7b8")])
+            blocks += (f'<div class="perfblock" data-p="{label}" style="display:{"block" if label == "1Y" else "none"}">{chart}'
+                       f'<div class="muted" style="font-size:12px;margin-top:4px">{label}: your current mix {rp:+.1f}% · 60/40 benchmark {rb:+.1f}% · as of {perf.asof:%d %b %Y}</div></div>')
+        chips = "".join(f'<button class="chip{" selected" if lb == "1Y" else ""}" onclick="setPortalPeriod(\'{lb}\', this)">{lb}</button>' for lb in performance.WEEKS if len(perf.dates) > performance.WEEKS[lb])
+        perf_html = (f'<div class="cardhead"><div><h2>Estimated return on investment</h2><div class="sub">Your current mix replayed on market history</div></div><div class="actions">{chips}</div></div>{blocks}'
+                     '<div class="footnote">Estimated with weekly prices of SPY (equities), AGG (bonds) and VNQ (alternatives), cash at 0%. It is NOT your account\'s actual return and not a forecast.</div>')
+    else:
+        perf_html = f'<div class="cardhead"><div><h2>Estimated return on investment</h2></div></div><p class="muted">{e(perf.reason)}</p>'
+    outside = [r for r in drift if r["outside"]]
+    drift_note = (f'<p style="margin:6px 0"><b class="bad">{e(worst["label"])} is {worst["gap"]:+g} points from target</b>, outside the ±{band:g} range. Your Relationship Manager reviews any proposed change; nothing happens automatically.</p>'
+                  if outside else f'<p class="good" style="margin:6px 0"><b>Your portfolio is within its allowed range.</b></p>')
+    return (f'<div class="twocol" style="margin-top:16px"><div class="card"><div class="cardhead"><div><h2>Allocation</h2><div class="sub">What you hold today</div></div></div>{charts.donut(c.weights)}</div>'
+            f'<div class="card"><div class="cardhead"><div><h2>Current vs target</h2><div class="sub">Where your plan wants you to be</div></div></div>{charts.compare_bars(c.weights, c.plan)}</div></div>'
+            f'<div class="twocol" style="margin-top:16px"><div class="card"><div class="cardhead"><div><h2>Portfolio drift</h2><div class="sub">How far each part has moved from target</div></div></div>{drift_note}{charts.drift_bars(drift, band)}</div>'
+            f'<div class="card"><div class="cardhead"><div><h2>Goal outlook</h2><div class="sub">Progress toward your goals (illustrative)</div></div></div>{charts.goal_bars(c.goals)}</div></div>'
+            f'<div class="card" style="margin-top:16px">{perf_html}</div>')
+
+
+def _thread_html(thread: list, me_role: str) -> str:
+    if not thread:
+        return '<p class="muted" style="margin:8px 0">No messages yet. Write the first one below.</p>'
+    out = []
+    for m in thread:
+        mine = m["role"] == me_role
+        new = "" if (mine or m["read"]) else ' <span class="chip red">new</span>'
+        out.append(f'<div class="msg {"mine" if mine else "theirs"}"><div class="msgmeta">{e(m["name"])} · {m["at"]:%d %b %H:%M} UTC{new}</div><div>{e(m["body"]).replace(chr(10), "<br>")}</div></div>')
+    return "".join(out)
+
+
+def _chat_card(store, c, role: str) -> str:
+    rm = next((r.name for r in store.rms if r.id == c.rm_id), "your Relationship Manager")
+    return (f'<div class="card" style="margin-top:16px" id="chatCard"><div class="cardhead"><div><h2>Message {e(rm)}</h2><div class="sub">Secure messages with your Relationship Manager</div></div></div>'
+            f'<div class="chatlog" id="chatLog">{_thread_html(store.thread, role)}</div>'
+            f'<div class="field"><label for="chatBody">Your message</label><textarea id="chatBody" maxlength="{services.MSG_MAX_CHARS}" placeholder="Ask a question about your portfolio, your goals or a recommendation…"></textarea></div>'
+            f'<div class="actions"><button class="btn primary" onclick="sendChat(\'chatBody\')">Send message</button></div>'
+            f'<div class="footnote">Plain text only. Do not share passwords or card numbers here. Messages are not trading instructions; the AI never trades on its own.</div></div>')
+
+
+def messages_page(store, user, clients, selected) -> str:
+    stats = store.msg_stats
+    order = sorted(clients, key=lambda x: (stats.get(x.id, {}).get("last") is None, -(stats[x.id]["last"].timestamp() if stats.get(x.id, {}).get("last") else 0)))
+    rows = ""
+    for x in order:
+        s = stats.get(x.id, {})
+        badge = f' <span class="chip red">{s["unread"]} new</span>' if s.get("unread") else ""
+        last = f'{s["last"]:%d %b %H:%M}' if s.get("last") else "no messages"
+        act = " active" if selected and x.id == selected.id else ""
+        rows += (f'<div class="clientrow{act}" style="grid-template-columns:36px 1fr" onclick="selectClient(\'{x.id}\', false, \'messages\')"><div class="avatar">{initials(x.name)}</div>'
+                 f'<div><strong>{e(x.name)}</strong>{badge}<small>{last}</small></div></div>')
+    if selected:
+        thread = (f'<div class="cardhead"><div><h2>{e(selected.name)}</h2><div class="sub">Secure messages · {money_m(selected.aum_musd)}</div></div></div>'
+                  f'<div class="chatlog" id="chatLog">{_thread_html(store.thread, "RM")}</div>'
+                  f'<div class="field"><label for="replyBody">Reply</label><textarea id="replyBody" maxlength="{services.MSG_MAX_CHARS}" placeholder="Write a reply to the client…"></textarea></div>'
+                  f'<div class="actions"><button class="btn" onclick="act(\'draft_reply\')">✦ Draft a reply with AI</button><button class="btn primary" onclick="sendChat(\'replyBody\')">Send reply</button></div>'
+                  f'<div class="footnote">An AI draft is only a starting point: you read, edit and send it. Nothing is sent automatically.</div>')
+    else:
+        thread = '<p class="muted">Select a client to see the conversation.</p>'
+    return (f'<section class="view" id="view-messages"><div class="pagehead"><div><div class="eyebrow">Client communication</div><h1>Messages</h1>'
+            f'<div class="sub">Secure conversations with your clients. New client messages appear here.</div></div></div>'
+            f'<div class="workgrid"><section class="card"><div class="cardhead"><h2>Conversations</h2></div><div class="queue">{rows or "<p class=muted>No clients.</p>"}</div></section>'
+            f'<section class="card">{thread}</section></div></section>')
 
 
 def _consent_card(store) -> str:
@@ -86,6 +166,7 @@ def _nav(store: Store, user: User, n_tasks: int) -> str:
   <button class="nav" data-access="rm" data-view="insights" onclick="setMain('insights',this)"><span class="ico">✧</span>AI Insights</button>
   <button class="nav" data-access="rm" data-view="research" onclick="setMain('research',this)"><span class="ico">◎</span>Research & Market</button>
   <button class="nav" data-access="rm" data-view="tasks" onclick="setMain('tasks',this)"><span class="ico">☷</span>Tasks <span class="chip red">{n_tasks}</span></button>
+  <button class="nav" data-access="rm" data-view="messages" onclick="setMain('messages',this)"><span class="ico">✉</span>Messages {"<span class=\"chip red\">" + str(store.msg_unread) + "</span>" if store.msg_unread else ""}</button>
   <button class="nav" data-access="rm" data-view="reports" onclick="setMain('reports',this)"><span class="ico">▤</span>Reports</button>
   <div class="navsep"></div>
   <button class="nav" data-access="admin" data-view="compliance" onclick="setView('compliance')"><span class="ico">♧</span>Compliance View</button>
@@ -107,11 +188,29 @@ def _topbar(user: User, store: Store, n_alerts: int) -> str:
 
 
 # ------------------------------------------------------------------ workbench
-def _queue_rows(clients, selected_id) -> str:
+def awaiting_approval(store, c) -> bool:
+    """ONE definition shared by the overview cards, the queue chips and the queue rows."""
+    p = store.proposals.get(c.id)
+    if p:
+        return p["status"] in ("awaiting_rm", "awaiting_second")
+    r = store.recs.get(c.id)
+    return bool(r and r.status == "Draft")
+
+
+def queue_counts(store, clients) -> dict:
+    appr = {c.id for c in clients if awaiting_approval(store, c)}
+    attn = {c.id for c in clients if c.kind in ("review", "approval") or c.id in appr}
+    cons = {c.id for c in clients if not store.has_active_consent(c.id)}
+    return dict(all=len(clients), attn=len(attn), appr=len(appr), cons=len(cons), recs=sum(1 for c in clients if c.id in store.recs), appr_ids=appr)
+
+
+def _queue_rows(clients, selected_id, store) -> str:
     out = []
     for c in clients:
         act = " active" if c.id == selected_id else ""
-        out.append(f'<div class="clientrow{act}" data-id="{c.id}" data-name="{e(c.name.lower())}" data-kind="{c.kind}" onclick="selectClient(\'{c.id}\')"><div class="avatar">{initials(c.name)}</div><div><strong>{e(c.name)}</strong><small>{money_m(c.aum_musd)} · {e(c.issue)}</small></div><span class="status {c.status_class}">{c.status_label}</span></div>')
+        kind = "approval" if awaiting_approval(store, c) else ("review" if c.kind == "approval" else c.kind)
+        consent = "1" if store.has_active_consent(c.id) else "0"
+        out.append(f'<div class="clientrow{act}" data-id="{c.id}" data-name="{e(c.name.lower())}" data-kind="{kind}" data-consent="{consent}" onclick="selectClient(\'{c.id}\')"><div class="avatar">{initials(c.name)}</div><div><strong>{e(c.name)}</strong><small>{money_m(c.aum_musd)} · {e(c.issue)}</small></div><span class="status {c.status_class}">{c.status_label}</span></div>')
     return "".join(out)
 
 
@@ -150,11 +249,8 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
     else:
         rec_text = rec.rationale
     drift_key, drift_val = headline_drift(c.weights, c.plan)
-    n_attn = sum(1 for x in clients if x.kind == "review")
-    n_appr = sum(1 for x in clients if x.kind == "approval")
-    n_draft = sum(1 for x in clients if store.recs.get(x.id) and store.recs[x.id].status == "Draft")
-    n_recs = sum(1 for x in clients if x.id in store.recs)
-    n_consent = sum(1 for x in clients if not store.has_active_consent(x.id))
+    qc = queue_counts(store, clients)
+    n_attn, n_appr, n_recs, n_consent = qc["attn"], qc["appr"], qc["recs"], qc["cons"]
     st = rec.status
     step1 = {"Draft": ("Pending", "warn"), "RM reviewed": ("Reviewed", "good"), "Edited": ("Edits saved", "good"), "Rejected": ("Rejected", "bad"), "Monitor": ("Pending", "warn")}[st]
     pill = {"Draft": "Draft", "RM reviewed": "RM reviewed", "Edited": "Edited", "Rejected": "Rejected", "Monitor": "Draft"}[st]
@@ -210,34 +306,39 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
     act_events = "".join(f'<div class="event"><div class="eventicon">✦</div><div><strong>{e(x.action)}</strong><p>{e(x.details)}</p></div><time>{e(x.ts.split(",")[0])}</time></div>' for x in events_audit)
     act_events += "".join(f'<div class="event"><div class="eventicon">▤</div><div><strong>Adviser note</strong><p>{e(n[1])}</p></div><time>{e(n[3].split(",")[0])}</time></div>' for n in notes[-3:])
     consent_ok = store.has_active_consent(c.id)
+    est = store.perf(c)
     perf = _perf(c)
+    if est.available and est.returns:
+        perf = {k: (f"{est.returns[k]:+.1f}%" if k in est.returns else "n/a") for k in ("1Y", "3Y", "5Y")}
     g0 = c.goals[0] if c.goals else None
     recs_tab = f'''<div class="risklist" style="margin-top:13px"><div class="riskitem"><div><strong>{e(title if abs(drift_val) >= .5 else "Review " + c.issue.lower())}</strong><small>{e(CLASS_LABEL[drift_key])} {c.weights.get(drift_key, 0)}% vs target {c.plan.get(drift_key, 0)}% · {e(st if st != "Monitor" else "Monitor")}</small></div><button class="btn small primary" onclick="openReview()">Review</button></div><div class="riskitem"><div><strong>Market event impact review</strong><small>Market and event feeds are not connected yet; this item will use live data in a later phase</small></div><button class="btn small" onclick="act('detail',{{what:'market'}})">Details</button></div><div class="riskitem"><div><strong>{e(g0.name if g0 else "Goal")} check-in</strong><small>Goal is approximately {g0.progress if g0 else 0}% on track (illustrative)</small></div><button class="btn small" onclick="act('detail',{{what:'goal'}})">Details</button></div></div>'''
+    from .recview import allocation_table as _alloc_tbl, trades_list as _trades_ul
+    recs_tab += f'<div class="charttitle" style="margin-top:16px">Current status and new adjustment</div>{_alloc_tbl(c, pb)}<div class="charttitle" style="margin-top:12px">Proposed trades (nothing is executed)</div>{_trades_ul(pb)}'
     sub = view_state.get("subtab", "overview")
     def S(n): return " active" if sub == n else ""
     def T(n, label): return f'<button class="{"active" if sub == n else ""}" onclick="setSubtab(\'{n}\',this)">{label}</button>'
-    queue = _queue_rows(clients, c.id)
+    queue = _queue_rows(clients, c.id, store)
     kinds_all = len(clients)
     return f'''<section class="view active" id="view-workbench">
   <div class="pagehead"><div><div class="eyebrow">Relationship Manager Workspace</div><h1>Good afternoon, {e(user.name.split()[0])}</h1><div class="sub">Your client priorities, AI-assisted recommendations and approvals in one place.</div></div><div class="actions"><button class="btn" onclick="act('export_queue')">↓ Export queue</button><button class="btn primary" onclick="openAsk()">✦ Ask Atlas AI</button></div></div>
   <div class="metrics">
-    <div class="metric"><div class="bubble" style="background:#fff0f0">♧</div><div><strong>{n_attn}</strong><span>Clients need attention</span></div></div>
-    <div class="metric"><div class="bubble" style="background:#fff3dc">◷</div><div><strong id="approvalCount">{n_draft}</strong><span>Awaiting your approval</span></div></div>
-    <div class="metric"><div class="bubble">✦</div><div><strong>{n_recs}</strong><span>AI recommendations</span></div></div>
-    <div class="metric"><div class="bubble" style="background:#e8f7ef">▤</div><div><strong id="consentCount">{n_consent}</strong><span>Consent pending</span></div></div>
-    <div class="metric"><div class="bubble" style="background:#e8f7ef">✓</div><div><strong>0</strong><span>Open compliance issues</span></div></div>
+    <div class="metric clickable" role="button" tabindex="0" title="Show these clients in the queue" onclick="jumpQueue('review')"><div class="bubble" style="background:#fff0f0">♧</div><div><strong>{n_attn}</strong><span>Clients need attention</span></div></div>
+    <div class="metric clickable" role="button" tabindex="0" title="Show clients awaiting your approval" onclick="jumpQueue('approval')"><div class="bubble" style="background:#fff3dc">◷</div><div><strong id="approvalCount">{n_appr}</strong><span>Awaiting your approval</span></div></div>
+    <div class="metric clickable" role="button" tabindex="0" title="Open AI Insights" onclick="setView('insights')"><div class="bubble">✦</div><div><strong>{n_recs}</strong><span>AI recommendations</span></div></div>
+    <div class="metric clickable" role="button" tabindex="0" title="Show clients without consent" onclick="jumpQueue('consent')"><div class="bubble" style="background:#e8f7ef">▤</div><div><strong id="consentCount">{n_consent}</strong><span>Consent pending</span></div></div>
+    <div class="metric clickable" role="button" tabindex="0" title="Open tasks" onclick="setView('tasks')"><div class="bubble" style="background:#e8f7ef">✓</div><div><strong>0</strong><span>Open compliance issues</span></div></div>
   </div>
   <div class="workgrid">
     <section class="card">
       <div class="cardhead"><h2>Client Queue</h2><button class="btn small" onclick="toggleFilters()">⚑ Filters</button></div>
-      <div class="clientfilters" id="queueFilters"><button class="chip selected" onclick="filterQueue('all',this)">All ({kinds_all})</button><button class="chip" onclick="filterQueue('review',this)">Needs attention ({n_attn})</button><button class="chip" onclick="filterQueue('approval',this)">Awaiting approval ({n_appr})</button></div>
+      <div class="clientfilters" id="queueFilters"><button class="chip selected" onclick="filterQueue('all',this)">All ({kinds_all})</button><button class="chip" onclick="filterQueue('review',this)">Needs attention ({n_attn})</button><button class="chip" onclick="filterQueue('approval',this)">Awaiting approval ({n_appr})</button><button class="chip" onclick="filterQueue('consent',this)">Consent pending ({n_consent})</button></div>
       <div class="field hidden" id="filterSearch"><input id="queueSearch" placeholder="Filter by client name…" oninput="searchQueue()"></div>
       <div class="queue" id="queue">{queue}</div>
       <div class="footnote">Demo queue · fictional client data · prioritisation is illustrative.</div>
     </section>
     <section class="detail">
       <div class="card">
-        <div class="cardhead" style="margin-bottom:14px"><div class="clienthero"><div class="avatar" id="heroAvatar">{initials(c.name)}</div><div><h2 id="heroName">{e(c.name)} <span class="tier">{c.tier}</span></h2><div class="meta">Client since {c.since} &nbsp; | &nbsp; AUM <b id="heroAum">{money_m(c.aum_musd)}</b></div></div></div><div class="actions"><button class="btn small" onclick="openCrm()">View in CRM ↗</button><button class="btn primary small" data-access="rm" onclick="setView('clientview')">Client View →</button></div></div>
+        <div class="cardhead" style="margin-bottom:14px"><div class="clienthero"><div class="avatar" id="heroAvatar">{initials(c.name)}</div><div><h2 id="heroName">{e(c.name)} <span class="tier">{c.tier}</span></h2><div class="meta">Client since {c.since} &nbsp; | &nbsp; AUM <b id="heroAum">{money_m(c.aum_musd)}</b></div></div></div><div class="actions"><button class="btn small primary" id="heroRunNow" data-access="rm" onclick="runClientNow()">▶ Run now</button><button class="btn small" onclick="viewReport(\'client_review\', \'{c.id}\')">▤ Report</button><button class="btn small" onclick="openCrm()">View in CRM ↗</button><button class="btn primary small" data-access="rm" onclick="setView('clientview')">Client View →</button></div></div>
         <div class="section-tabs">{T("overview","Overview")}{T("recommendations","AI Recommendations (3)")}{T("portfolio","Portfolio")}{T("goals","Goals")}{T("risk","Risk & Suitability")}{T("activity","Activity & Notes")}</div>
         <div class="subview{S("overview")}" id="sub-overview"><div class="summarygrid" style="margin-top:13px">
           <div class="summary"><div class="label">Portfolio value</div><strong id="summaryAum">{money_m(c.aum_musd)}</strong><small class="good">↑ {6.3 if c.name == "Rajesh Menon" else 3 + _h(c.id, "q") % 70 / 10:.1f}% vs. 3 months ago</small></div>
@@ -335,11 +436,11 @@ def compliance(store: Store, user: User, c) -> str:
 
 # ------------------------------------------------------------------ simple pages
 def home(store, user, clients) -> str:
-    n_attn = sum(1 for c in clients if c.kind == "review")
-    n_draft = sum(1 for c in clients if store.recs.get(c.id) and store.recs[c.id].status == "Draft")
-    first = next((c for c in clients if store.recs.get(c.id) and store.recs[c.id].status == "Draft"), clients[0] if clients else None)
+    qc = queue_counts(store, clients)
+    n_attn, n_draft = qc["attn"], qc["appr"]
+    first = next((c for c in clients if c.id in qc["appr_ids"]), clients[0] if clients else None)
     line = f"{e(first.name)} · {e(first.issue)} · RM review required." if first else "No clients assigned."
-    return f'''<section class="view" id="view-home"><div class="pagehead"><div><div class="eyebrow">Overview</div><h1>Relationship Manager Home</h1><div class="sub">A prioritised summary of your workday.</div></div><button class="btn primary" onclick="setView('workbench')">Open RM Workbench →</button></div><div class="metrics"><div class="metric"><div class="bubble">♙</div><div><strong>{len(clients)}</strong><span>Assigned clients</span></div></div><div class="metric"><div class="bubble" style="background:#fff0f0">♧</div><div><strong>{n_attn}</strong><span>Need attention</span></div></div><div class="metric"><div class="bubble" style="background:#fff3dc">◷</div><div><strong>{n_draft}</strong><span>Pending approvals</span></div></div></div><div class="card"><h2>Start with your highest-priority client</h2><p class="muted">{line}</p><button class="btn primary" onclick="setView('workbench')">Open client queue</button></div></section>'''
+    return f'''<section class="view" id="view-home"><div class="pagehead"><div><div class="eyebrow">Overview</div><h1>Relationship Manager Home</h1><div class="sub">A prioritised summary of your workday.</div></div><button class="btn primary" onclick="setView('workbench')">Open RM Workbench →</button></div><div class="metrics"><div class="metric"><div class="bubble">♙</div><div><strong>{len(clients)}</strong><span>Assigned clients</span></div></div><div class="metric clickable" role="button" tabindex="0" onclick="jumpQueue('review')"><div class="bubble" style="background:#fff0f0">♧</div><div><strong>{n_attn}</strong><span>Need attention</span></div></div><div class="metric clickable" role="button" tabindex="0" onclick="jumpQueue('approval')"><div class="bubble" style="background:#fff3dc">◷</div><div><strong>{n_draft}</strong><span>Pending approvals</span></div></div></div><div class="card"><h2>Start with your highest-priority client</h2><p class="muted">{line}</p><button class="btn primary" onclick="setView('workbench')">Open client queue</button></div></section>'''
 
 
 def clients_page(clients) -> str:
@@ -348,9 +449,45 @@ def clients_page(clients) -> str:
 
 
 def insights(store, clients) -> str:
-    items = [(c, store.recs[c.id]) for c in clients if c.id in store.recs and store.recs[c.id].status in ("Draft", "Edited", "RM reviewed")][:6]
-    rows = "".join(f'<div class="riskitem"><div><strong>{e(r.title)}</strong><small>{e(c.name)} · {e(services.rationale_for(c)[1][:86])}…</small></div><span class="pill {"pending" if r.status == "Draft" else ""}">{"Review" if r.status == "Draft" else e(r.status)}</span></div>' for c, r in items)
-    return f'''<section class="view" id="view-insights"><div class="pagehead"><div><div class="eyebrow">AI intelligence</div><h1>AI Insights</h1><div class="sub">Signals are prioritised for adviser review, not automatic execution.</div></div><button class="btn primary" onclick="setView('workbench')">Review recommendations</button></div><div class="card">{rows or '<p class="muted">No open signals.</p>'}</div></section>'''
+    from .recview import rec_detail, allocation_table, trades_list, tier_chip
+    qc = queue_counts(store, clients)
+    pending = [c for c in clients if c.id in qc["appr_ids"]]
+    other = [c for c in clients if c.id in store.recs and c.id not in qc["appr_ids"] and store.recs[c.id].status in ("Edited", "RM reviewed")][:6]
+    cards, templates = [], []
+    for c in pending:
+        prop = store.proposals.get(c.id)
+        pb = prop["body"] if prop else None
+        rec = store.rec(c.id)
+        title, rat = services.rationale_for(c)
+        status = prop["status"].replace("_", " ") if prop else rec.status
+        templates.append(f'<template id="rec-{c.id}">{rec_detail(c, prop, title, rec.rationale or rat, status)}</template>')
+        head = pb["title"] if pb else rec.title
+        text = pb["summary"] if pb else (rec.rationale or rat)
+        cards.append(
+            f'<div class="card" style="margin-bottom:12px" data-client="{c.id}"><div class="cardhead"><div><strong>{e(head)}</strong>'
+            f'<div class="muted" style="font-size:12px">{e(c.name)} · {money_m(c.aum_musd)} · {e(c.issue)}</div></div><div>{tier_chip(pb)}</div></div>'
+            f'<p style="margin:6px 0 10px">{e(text)}</p>{allocation_table(c, pb)}'
+            f'<div style="margin-top:8px"><b style="font-size:12px">Proposed trades</b>{trades_list(pb)}</div>'
+            f'<div class="actions" style="margin-top:8px"><button class="btn small" onclick="showRec(\'{c.id}\')">View details</button>'
+            f'<button class="btn small primary" onclick="selectClient(\'{c.id}\', true, \'insights\')">Review &amp; decide</button>'
+            f'<button class="btn small" onclick="selectClient(\'{c.id}\', false, \'workbench\')">Open client</button></div></div>')
+    rows = ""
+    for c in other:
+        title, rat = services.rationale_for(c)
+        r = store.recs[c.id]
+        templates.append(f'<template id="rec-{c.id}">{rec_detail(c, store.proposals.get(c.id), title, r.rationale or rat, r.status)}</template>')
+        rows += f'<div class="riskitem"><div><strong>{e(r.title)}</strong><small>{e(c.name)} · {e(r.status)}</small></div><button class="btn small" onclick="showRec(\'{c.id}\')">Review</button></div>'
+    done = f'<h2 style="margin:18px 0 10px">Already actioned</h2><div class="card"><div class="risklist">{rows}</div></div>' if rows else ""
+    empty = '<div class="card"><p class="muted">Nothing is waiting for your approval.</p></div>'
+    return (f'<section class="view" id="view-insights"><div class="pagehead"><div><div class="eyebrow">AI intelligence</div><h1>AI Insights</h1>'
+            f'<div class="sub">Signals are prioritised for adviser review, not automatic execution.</div></div><div class="actions">'
+            f'<button class="btn" onclick="act(\'run_all\')">↻ Run analysis for all my clients</button>'
+            f'<button class="btn primary" onclick="document.getElementById(\'pendingApprovals\').scrollIntoView({{behavior:\'smooth\'}})">Review recommendations ({len(pending)})</button></div></div>'
+            f'<div id="pendingApprovals"><h2 style="margin:6px 0 10px">Recommendations awaiting your approval ({len(pending)})</h2>{"".join(cards) or empty}</div>'
+            f'{done}{"".join(templates)}'
+            f'<div class="modalback" id="recModal" role="dialog" aria-modal="true"><div class="modal"><div class="modalhead"><h2>AI recommendation</h2>'
+            f'<button class="close" onclick="closeModal(\'recModal\')" aria-label="Close">×</button></div><div class="modalbody" id="recBody"></div>'
+            f'<div class="modalfoot"><button class="btn" onclick="closeModal(\'recModal\')">Close</button></div></div></div></section>')
 
 
 def _fmt_dt(dt) -> str:
@@ -450,8 +587,23 @@ def tasks(store, clients) -> str:
     return f'''<section class="view" id="view-tasks"><div class="pagehead"><div><div class="eyebrow">Tasks & approvals</div><h1>Tasks</h1><div class="sub">Actions awaiting adviser attention.</div></div></div><div class="card">{rows or '<p class="muted">No open tasks.</p>'}</div></section>'''
 
 
-def reports() -> str:
-    return '''<section class="view" id="view-reports"><div class="pagehead"><div><div class="eyebrow">Reporting</div><h1>Reports</h1><div class="sub">Prepare review summaries with source links and an audit trail.</div></div><button class="btn primary" onclick="act('report',{template:'Portfolio review report'})">Generate review report</button></div><div class="card"><h2>Available report templates</h2><div class="riskitem"><div><strong>Quarterly portfolio review</strong><small>Holdings, performance, allocation drift, goals and adviser commentary</small></div><button class="btn small" onclick="act('report',{template:'Quarterly portfolio review'})">Generate</button></div><div class="riskitem"><div><strong>AI recommendation rationale</strong><small>Signals, calculations, assumptions, checks and approval history</small></div><button class="btn small" onclick="act('report',{template:'AI recommendation rationale'})">Generate</button></div><div class="footnote">Reports download as Markdown for the client currently selected in the RM Workbench.</div></div></section>'''
+def reports(store, clients, selected) -> str:
+    from ..reports import KINDS
+    cards = "".join(
+        f'<div class="riskitem"><div><strong>{e(t)}</strong><small>{e(d)}</small></div><div class="actions">'
+        f'<button class="btn small primary" onclick="viewReport(\'{k}\')">View</button>'
+        f'<button class="btn small" onclick="downloadReport(\'{k}\',\'\',\'html\')">Download</button>'
+        f'<button class="btn small" onclick="downloadReport(\'{k}\',\'\',\'csv\')">CSV</button></div></div>' for k, (t, d) in KINDS.items())
+    opts = "".join(f'<option value="{c.id}"{" selected" if selected and c.id == selected.id else ""}>{e(c.name)}</option>' for c in clients)
+    return (f'<section class="view" id="view-reports"><div class="pagehead"><div><div class="eyebrow">Reporting</div><h1>Reports</h1>'
+            f'<div class="sub">Prepare review summaries with source links and an audit trail. Reports use stored records only; nothing is sent.</div></div>'
+            f'<button class="btn primary" onclick="viewReport(\'portfolio_review\')">Generate review report</button></div>'
+            f'<div class="card"><h2>Portfolio-wide reports</h2>{cards}<div class="footnote">View opens the report here; Download saves a print-ready HTML file (CSV for the tables). '
+            f'Clients without monitoring consent appear as paused rows rather than blocking the report.</div></div>'
+            f'<div class="card" style="margin-top:14px"><h2>Client report: final analysis, recommendation and adjustment</h2>'
+            f'<div class="actions"><select id="reportClient" style="max-width:320px">{opts}</select>'
+            f'<button class="btn small primary" onclick="viewReport(\'client_review\', document.getElementById(\'reportClient\').value)">View</button>'
+            f'<button class="btn small" onclick="downloadReport(\'client_review\', document.getElementById(\'reportClient\').value, \'html\')">Download</button></div></div></section>')
 
 
 # ------------------------------------------------------------------ settings & scheduler
@@ -526,7 +678,7 @@ def settings(store: Store, user: User, pick_clients, saved: dict | None, perm_rm
 # ------------------------------------------------------------------ modals
 def modals(store: Store, user: User, c, readonly: bool) -> str:
     if c is None:
-        return '<div class="toast" id="toast"></div>' + _ask_modal()
+        return '<div class="toast" id="toast"></div>' + _ask_modal() + _report_modal()
     rec = store.rec(c.id)
     title, rat = services.rationale_for(c)
     draft = store.draft(c)
@@ -549,6 +701,7 @@ def modals(store: Store, user: User, c, readonly: bool) -> str:
     tx = "".join(f'<tr><td>{d}</td><td>{k}</td><td>{e(i)}</td><td>{money(a)}</td><td><span class="pill">{s}</span></td></tr>' for d, k, i, a, s in c.transactions)
     return f'''<div class="modalback" id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="reviewTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">AI recommendation · {e(rec.status)}</div><h2 id="reviewTitle">Review & edit recommendation</h2></div><button class="close" onclick="closeModal('reviewModal')" aria-label="Close">×</button></div><div class="modalbody"><div class="notice">This is a fictional scenario. No order will be placed. A recommendation must pass applicable policy, suitability, consent and approval checks before any authorised action.{" Read-only: only a Relationship Manager can record a decision." if readonly else ""}</div><div class="twocol"><div class="field"><label>Client</label><input value="{e(c.name)}" readonly></div><div class="field"><label>Approval tier</label><select id="approvalTier"{" disabled" if readonly else ""}>{tier_opts}</select></div></div><div class="twocol"><div class="field"><label>Current equity allocation</label><input value="{c.weights.get("EQ", 0)}%" readonly></div><div class="field"><label>Target equity allocation</label><input id="targetEquity" type="number" min="0" max="100" value="{eq_plan}"{ro}></div></div><div class="field"><label>AI rationale (editable)</label><textarea id="rationale"{ro}>{e(rec.rationale or rat)}</textarea></div><div class="field"><label>RM review note (required to record decision)</label><textarea id="rmNote" placeholder="Add rationale for approval, edit or rejection…"{ro}>{e(rec.note)}</textarea></div>{evid}<div class="field"><label>Decision</label><select id="decision"{" disabled" if readonly else ""}><option value="approve">Approve draft for next workflow step</option><option value="edit">Save edits for further review</option><option value="reject">Reject recommendation</option></select></div>{"" if readonly else '<div class="field"><label><input type="checkbox" id="convoHeld"> I have spoken with the client (required to approve a Tier 3 item)</label></div>'}<div class="checkrow"><span class="checkmark">✓</span><span>AI output labelled as draft</span><span class="right pass">Yes</span></div><div class="checkrow"><span class="checkmark {"" if consent_ok else "pending"}">{"✓" if consent_ok else "!"}</span><span>Monitoring consent on file</span><span class="right {"pass" if consent_ok else "pending"}">{"Yes" if consent_ok else "No — required"}</span></div><div class="checkrow"><span class="checkmark pending">!</span><span>Client consent for execution</span><span class="right pending">No — still required</span></div></div><div class="modalfoot">{foot}</div></div></div>
 {_ask_modal()}
+{_report_modal()}
 <div class="modalback" id="messageModal" role="dialog" aria-modal="true" aria-labelledby="messageTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Client View · RM-gated</div><h2 id="messageTitle">Draft client message</h2></div><button class="close" onclick="closeModal('messageModal')">×</button></div><div class="modalbody"><div class="notice">This creates a draft only. It will not be sent from this prototype.</div><div class="field"><label>Subject</label><input id="messageSubject" value="{e(draft["subject"])}"></div><div class="field"><label>Message</label><textarea id="messageBody">{e(draft["body"])}</textarea></div></div><div class="modalfoot"><button class="btn" onclick="closeModal('messageModal')">Close draft</button><button class="btn primary" onclick="markDraftReady()">Mark ready for RM review</button></div></div></div>
 <div class="modalback" id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notesTitle"><div class="modal"><div class="modalhead"><h2 id="notesTitle">Add adviser note</h2><button class="close" onclick="closeModal('notesModal')">×</button></div><div class="modalbody"><div class="field"><label>Note</label><textarea id="noteText" placeholder="Enter a factual client note…"></textarea></div><div class="footnote">Notes are treated as untrusted text: instruction-like content is quarantined by the control layer (added with the agents).</div></div><div class="modalfoot"><button class="btn" onclick="closeModal('notesModal')">Cancel</button><button class="btn primary" onclick="saveNote()">Save note</button></div></div></div>
 <div class="modalback" id="crmModal" role="dialog" aria-modal="true"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Salesforce CRM · simulated · read-only</div><h2>CRM record · {e(c.name)}</h2></div><button class="close" onclick="closeModal('crmModal')">×</button></div><div class="modalbody"><div class="tablewrap"><table><tbody><tr><th>Client ID</th><td>{e(c.id)}</td></tr><tr><th>Email</th><td>{e(c.email)}</td></tr><tr><th>Relationship manager</th><td>{e(rm_name)}</td></tr><tr><th>Service tier</th><td>{c.tier}</td></tr><tr><th>Client since</th><td>{c.since}</td></tr><tr><th>Risk profile (CRM)</th><td>{e(c.risk_profile)}</td></tr><tr><th>Communication preference</th><td>{e(c.contact_pref)}</td></tr></tbody></table></div><div class="calloutnote">Data comes from the simulated Salesforce connector. Atlas reads CRM data and never writes back to it.</div></div><div class="modalfoot"><button class="btn" onclick="closeModal('crmModal')">Close</button></div></div></div>
@@ -556,5 +709,17 @@ def modals(store: Store, user: User, c, readonly: bool) -> str:
 <div class="toast" id="toast"></div>'''
 
 
+def _report_modal() -> str:
+    return ('<div class="modalback" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportTitle"><div class="modal" style="max-width:920px"><div class="modalhead">'
+            '<div><div class="eyebrow">Report</div><h2 id="reportTitle">Report</h2></div><button class="close" onclick="closeModal(\'reportModal\')" aria-label="Close">×</button></div>'
+            '<div class="modalbody" id="reportBody"></div><div class="modalfoot"><button class="btn" onclick="closeModal(\'reportModal\')">Close</button>'
+            '<button class="btn" id="reportCsv" onclick="downloadCurrentReport(\'csv\')">Download CSV</button><button class="btn primary" onclick="downloadCurrentReport(\'html\')">Download report</button></div></div></div>')
+
+
 def _ask_modal() -> str:
-    return '''<div class="modalback" id="askModal" role="dialog" aria-modal="true" aria-labelledby="askTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Internal assistant</div><h2 id="askTitle">Ask Atlas AI</h2></div><button class="close" onclick="closeModal('askModal')">×</button></div><div class="modalbody"><p class="muted">Ask about the selected client, portfolio signal, goal or recommendation. Answers are rule-based from stored records until the AI copilot is connected, and should not be treated as financial advice.</p><div class="field"><label>Your question</label><textarea id="askQuestion" placeholder="e.g., Why is this portfolio flagged for review?"></textarea></div><div id="askAnswer" class="calloutnote hidden"></div><div class="actions"><button class="btn" onclick="askPrompt('Explain the allocation drift')">Explain allocation drift</button><button class="btn" onclick="askPrompt('Summarise client goals')">Summarise goals</button><button class="btn" onclick="askPrompt('What checks are pending?')">Pending checks</button></div></div><div class="modalfoot"><span class="footnote">Rule-based · no external AI service is connected yet.</span><button class="btn primary" onclick="answerAsk()">Get answer</button></div></div></div>'''
+    from ..agents.llm import llm_status
+    st = llm_status()
+    foot = (f"AI-assisted ({st['provider']}) · answers cite the records they use" if st["live"] else "Rule-based · no external AI service is connected")
+    intro = ("Answers are drafted by the connected AI from this client's authorised records only, with the records cited." if st["live"]
+             else "Answers are rule-based from stored records until an AI service is connected.")
+    return '''<div class="modalback" id="askModal" role="dialog" aria-modal="true" aria-labelledby="askTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Internal assistant</div><h2 id="askTitle">Ask Atlas AI</h2></div><button class="close" onclick="closeModal('askModal')">×</button></div><div class="modalbody"><p class="muted">Ask about the selected client, portfolio signal, goal or recommendation. ''' + intro + ''' This is not financial advice.</p><div class="field"><label>Your question</label><textarea id="askQuestion" placeholder="e.g., Why is this portfolio flagged for review?"></textarea></div><div id="askAnswer" class="calloutnote hidden"></div><div class="actions"><button class="btn" onclick="askPrompt('Explain the allocation drift')">Explain allocation drift</button><button class="btn" onclick="askPrompt('Summarise client goals')">Summarise goals</button><button class="btn" onclick="askPrompt('What checks are pending?')">Pending checks</button></div></div><div class="modalfoot"><span class="footnote">''' + foot + '''</span><button class="btn primary" onclick="answerAsk()">Get answer</button></div></div></div>'''

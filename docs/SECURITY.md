@@ -17,6 +17,8 @@ This is a **case-study prototype with synthetic data**. It runs, and it has real
 | Errors | Unexpected errors show only a reference number; details stay in the server log. |
 | Audit | Append-only (database triggers block UPDATE/DELETE); written by code in the same transaction as the action. |
 | Production guards | `DWN_ENV=prod` refuses to start on SQLite, or with demo accounts on the default password; the login page shows no demo credentials outside demo mode. |
+| Secure messages | A client can write only to their own RM and an RM only to assigned clients (checked on the server for every message). Plain text, 2,000 characters, 20 per hour. Bodies are HTML-escaped on display and are never copied into the audit log (only the fact that a message was sent). AI reply drafts are consent-gated, grounded and never sent automatically. |
+| Reports | Built from stored records the user may see; client reports for a client without consent show a paused page instead of analysis; downloads are escaped, script-free HTML or CSV with spreadsheet-formula neutralisation; every view and download is audited. |
 | Dependencies | `pip-audit` reported **no known vulnerabilities** in the installed packages (checked 2026-10-20); versions are pinned. |
 
 ## Known limitations (read before any real use)

@@ -4,9 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="atlas.css">
-<style>html,body{margin:0;background:var(--bg)}</style>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg)}
+#root{height:100vh;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
+#busyBar{position:fixed;left:0;top:0;height:3px;width:0;background:#2563eb;z-index:99999;opacity:0;transition:opacity .2s}
+#busyBar.on{opacity:1;width:85%;transition:width 8s cubic-bezier(.1,.6,.2,1),opacity .1s}
+</style>
 </head>
 <body>
+<div id="busyBar"></div>
 <div id="root"></div>
 <script>
 /* Atlas UI shell. Presentation and pure-UI behaviour only (tabs, filters, modals, form toggles).
@@ -14,12 +20,14 @@
    No authentication, authorisation or client data logic lives here. */
 let ARGS = null, selectedRole = 'RM', lastRenderKey = null, lastEffect = null;
 const ui = {view: null, subtab: 'overview', queueKind: 'all', period: '1Y', modals: []};
-const PRESERVE = ['askQuestion','queueSearch','clientBookSearch','auditSearch','auditAction','scheduleClientSearch','scheduleName','scheduleFrequency','scheduleTime','monthDay','scheduleClients','scheduleEnabled','enableClientSelection','scopeMonitor','scopeRisk','scopeGoals','scopeEvents','scopeDrafts','rmNote','noteText','messageSubject','messageBody','rationale','targetEquity','decision','approvalTier','newDataSource','onboardingClientEmail','consentTerms','consentAI'];
+const PRESERVE = ['askQuestion','queueSearch','clientBookSearch','auditSearch','auditAction','scheduleClientSearch','scheduleName','scheduleFrequency','scheduleTime','monthDay','scheduleClients','scheduleEnabled','enableClientSelection','scopeMonitor','scopeRisk','scopeGoals','scopeEvents','scopeDrafts','rmNote','noteText','messageSubject','messageBody','rationale','targetEquity','decision','approvalTier','newDataSource','onboardingClientEmail','consentTerms','consentAI','reportClient','chatBody','replyBody'];
 
 /* ---------- Streamlit component protocol ---------- */
 function post(type, extra) { window.parent.postMessage(Object.assign({isStreamlitMessage: true, type: type}, extra || {}), '*'); }
 function send(value) { post('streamlit:setComponentValue', {value: value, dataType: 'json'}); }
+function busy(on) { const b = document.getElementById('busyBar'); if (b) b.classList.toggle('on', on); }
 function act(action, payload) {
+  if (action !== 'refresh_view') busy(true);
   send({id: Date.now() + '-' + Math.random().toString(36).slice(2), action: action, payload: payload || {}, ui: {view: ui.view, subtab: ui.subtab}});
 }
 window.addEventListener('message', function (ev) {
@@ -47,7 +55,21 @@ function restore(s, skip) {
     if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k];
   });
 }
+let pollTimer = null;
+function pollBg() {
+  clearTimeout(pollTimer);
+  busy(!!(ARGS && ARGS.bg_running));
+  if (!ARGS) return;
+  if (ARGS.bg_running) { pollTimer = setTimeout(() => act('refresh_view'), 2500); return; }
+  const chatOpen = ARGS.role === 'Client' || ui.view === 'messages';
+  if (ARGS.poll_chat && chatOpen && !document.hidden) {
+    if (ARGS.chat_unread && !seenPending) { seenPending = true; setTimeout(() => { seenPending = false; act('chat_seen'); }, 3500); }
+    pollTimer = setTimeout(() => act('refresh_view'), 12000);
+  }
+}
+let seenPending = false;
 function render() {
+  busy(false);
   const root = document.getElementById('root');
   const key = ARGS.render_key;
   if (key !== lastRenderKey) {
@@ -68,6 +90,8 @@ function render() {
     if (eff.subtab) ui.subtab = eff.subtab;
     if (eff.reset_modals) ui.modals = [];
     applyView();
+    if (eff.report) showReport(eff.report);
+    if (eff.fill) { const fe = document.getElementById(eff.fill.id); if (fe) { fe.value = eff.fill.text; fe.focus(); } }
     if (eff.open_modal) openModal(eff.open_modal);
     if (eff.ask_answer !== undefined) showAsk(eff.ask_answer);
     if (eff.close_modal) closeModal(eff.close_modal);
@@ -77,6 +101,7 @@ function render() {
   } else { applyView(); }
   ui.modals.forEach(id => { const m = document.getElementById(id); if (m) m.classList.add('open'); });
   post('streamlit:setFrameHeight', {height: window.innerHeight || 900});
+  pollBg();
 }
 function applyView() {
   if (!ARGS) return;
@@ -99,7 +124,7 @@ function applyView() {
 }
 function wire() {
   const gs = document.getElementById('globalSearch');
-  if (gs) gs.addEventListener('keydown', e => { if (e.key === 'Enter') { const q = e.target.value.toLowerCase(); const row = [...document.querySelectorAll('.clientrow')].find(r => r.dataset.name.includes(q)); if (row) selectClient(row.dataset.id); else if (q) toast('No matching client in your queue.'); } });
+  if (gs) gs.addEventListener('keydown', e => { if (e.key === 'Enter') { const q = e.target.value.toLowerCase(); const row = [...document.querySelectorAll('#queue .clientrow')].find(r => r.dataset.name.includes(q)); if (row) selectClient(row.dataset.id); else if (q) toast('No matching client in your queue.'); } });
   document.querySelectorAll('.modalback').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); }));
   const sc = document.getElementById('scheduleClients'); if (sc) sc.addEventListener('change', () => updateClientScopePicker(false));
   const en = document.getElementById('enableClientSelection'); if (en) en.addEventListener('change', e => { document.getElementById('clientSelectionPanel').classList.toggle('hidden', !e.target.checked); updateScheduleSummary(); });
@@ -118,14 +143,16 @@ function setView(name) {
   if (!ARGS) return;
   if (name === 'settings' && ARGS.settings_denied) { toast('Your administrator has not enabled scheduling access.'); return; }
   if (!(ARGS.allowed || []).includes(name)) { toast('This view is not available for your role.'); return; }
-  ui.view = name; applyView(); window.scrollTo({top: 0, behavior: 'smooth'});
+  ui.view = name; applyView(); document.getElementById('root').scrollTo({top: 0, behavior: 'smooth'});
   if (name === 'research') act('market_refresh_if_stale');
 }
 function setMain(name) { setView(name); }
 function setSubtab(name) { ui.subtab = name; applyView(); }
 function filterQueue(kind) { ui.queueKind = kind; applyView(); }
+function jumpQueue(kind) { setView('workbench'); ui.queueKind = kind; applyView(); const q = document.getElementById('queue'); if (q) q.scrollIntoView({behavior: 'smooth', block: 'start'}); }
 function toggleFilters() { document.getElementById('filterSearch').classList.toggle('hidden'); }
-function searchQueue() { const el = document.getElementById('queueSearch'); const q = el ? el.value.toLowerCase() : ''; document.querySelectorAll('.clientrow').forEach(r => r.style.display = r.dataset.name.includes(q) && (ui.queueKind === 'all' || r.dataset.kind === ui.queueKind) ? 'grid' : 'none'); }
+function searchQueue() { const el = document.getElementById('queueSearch'); const q = el ? el.value.toLowerCase() : ''; document.querySelectorAll('#queue .clientrow').forEach(r => r.style.display = r.dataset.name.includes(q) && kindMatch(r) ? 'grid' : 'none'); }
+function kindMatch(r) { const k = ui.queueKind; if (k === 'all') return true; if (k === 'review') return r.dataset.kind === 'review' || r.dataset.kind === 'approval'; if (k === 'consent') return r.dataset.consent === '0'; return r.dataset.kind === k; }
 function setPeriod(p) { ui.period = p; applyView(); }
 function filterClientBook() { const q = (document.getElementById('clientBookSearch').value || '').toLowerCase(); let v = 0; document.querySelectorAll('#clientBookList .riskitem').forEach(r => { const s = r.innerText.toLowerCase().includes(q); r.style.display = s ? 'flex' : 'none'; if (s) v++; }); document.getElementById('clientBookEmpty').style.display = v ? 'none' : 'block'; }
 function filterAudit() { const q = document.getElementById('auditSearch').value.toLowerCase(); const a = document.getElementById('auditAction').value; document.querySelectorAll('#auditBody tr').forEach(r => { const t = r.innerText.toLowerCase(); r.style.display = (t.includes(q) && (a === 'all' || r.dataset.action === a)) ? '' : 'none'; }); }
@@ -143,12 +170,21 @@ function acceptOnboardingConsent() { act('accept_consent', {email: document.getE
 function selectClient(id, review, goto) { act('select_client', {id: id, review: !!review, goto: goto || ''}); }
 function openClientFromBook(id) { act('select_client', {id: id, goto: 'workbench'}); }
 function openReview() { openModal('reviewModal'); }
+function showRec(id) { const tp = document.getElementById('rec-' + id); const b = document.getElementById('recBody'); if (!tp || !b) return; b.innerHTML = tp.innerHTML; openModal('recModal'); }
 function openAsk() { openModal('askModal'); }
 function openClientMessage() { openModal('messageModal'); }
 function openNotes() { openModal('notesModal'); }
 function openCrm() { openModal('crmModal'); }
 function openHistory() { openModal('historyModal'); }
 function runAgent() { act('run_agent'); }
+function sendChat(id) { const el = document.getElementById(id); if (!el) return; act('send_message', {body: el.value}); }
+function setPortalPeriod(p, btn) { document.querySelectorAll('.perfblock').forEach(b => b.style.display = b.dataset.p === p ? 'block' : 'none'); document.querySelectorAll('#view-clientportal .actions .chip').forEach(c => c.classList.toggle('selected', c === btn)); }
+function runClientNow() { toast('Running the monitoring agents for this client…'); act('run_agent'); }
+let currentReport = null;
+function viewReport(kind, cid) { act('report_view', {kind: kind, client_id: cid || ''}); }
+function downloadReport(kind, cid, fmt) { act('report_download', {kind: kind, client_id: cid || '', fmt: fmt || 'html'}); }
+function showReport(r) { currentReport = r; document.getElementById('reportTitle').textContent = r.title; document.getElementById('reportBody').innerHTML = r.html; const c = document.getElementById('reportCsv'); if (c) c.style.display = r.has_csv ? '' : 'none'; }
+function downloadCurrentReport(fmt) { if (currentReport) downloadReport(currentReport.kind, currentReport.client_id, fmt); }
 function saveReview() { act('save_review', {convo: !!(document.getElementById('convoHeld') && document.getElementById('convoHeld').checked), note: document.getElementById('rmNote').value, decision: document.getElementById('decision').value, tier: document.getElementById('approvalTier').value, target: document.getElementById('targetEquity').value, rationale: document.getElementById('rationale').value}); }
 function saveNote() { act('save_note', {text: document.getElementById('noteText').value}); }
 function markDraftReady() { act('mark_draft_ready', {subject: document.getElementById('messageSubject').value, body: document.getElementById('messageBody').value}); }

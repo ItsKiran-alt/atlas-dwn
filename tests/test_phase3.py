@@ -294,7 +294,9 @@ def test_admin_cannot_record_rm_decision(repo):
 
 def test_no_execution_or_messaging_code_path():
     names = [n for n, _ in inspect.getmembers(services, inspect.isfunction)]
-    assert not [n for n in names if any(w in n for w in ("execute", "trade", "order", "send", "transfer"))]
+    # send_message is the in-app secure chat between a client and their own RM (stored in our database, no email/SMS/trade delivery);
+    # it is the only allowed exception and is covered by tests/test_messages.py
+    assert not [n for n in names if any(w in n for w in ("execute", "trade", "order", "send", "transfer")) and n != "send_message"]
 
 
 # ---------------- scheduler & admin ----------------
