@@ -1,0 +1,2092 @@
+[
+ {
+  "size": "desktop",
+  "role": "-",
+  "view": "login",
+  "exact": 13,
+  "total": 63,
+  "rows": [
+   [
+    ".topbar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".brand",
+    "present only in original",
+    ""
+   ],
+   [
+    ".search",
+    "present only in original",
+    ""
+   ],
+   [
+    ".topbutton",
+    "present only in original",
+    ""
+   ],
+   [
+    ".userchip",
+    "present only in original",
+    ""
+   ],
+   [
+    ".avatar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".sidebar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".nav",
+    "present only in original",
+    ""
+   ],
+   [
+    ".nav.active",
+    "present only in original",
+    ""
+   ],
+   [
+    ".navsep",
+    "present only in original",
+    ""
+   ],
+   [
+    ".main",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pagehead",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pagehead h1",
+    "present only in original",
+    ""
+   ],
+   [
+    ".actions",
+    "present only in original",
+    ""
+   ],
+   [
+    ".btn.small",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metrics",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric span",
+    "present only in original",
+    ""
+   ],
+   [
+    ".bubble",
+    "present only in original",
+    ""
+   ],
+   [
+    ".workgrid",
+    "present only in original",
+    ""
+   ],
+   [
+    ".card",
+    "present only in original",
+    ""
+   ],
+   [
+    ".cardhead",
+    "present only in original",
+    ""
+   ],
+   [
+    ".cardhead h2",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chip",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chip.selected",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientfilters",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow.active",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow small",
+    "present only in original",
+    ""
+   ],
+   [
+    ".status",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clienthero h2",
+    "present only in original",
+    ""
+   ],
+   [
+    ".tier",
+    "present only in original",
+    ""
+   ],
+   [
+    ".section-tabs",
+    "present only in original",
+    ""
+   ],
+   [
+    ".section-tabs button",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summarygrid",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summary",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summary strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".twocol",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chartcard",
+    "present only in original",
+    ""
+   ],
+   [
+    ".charttitle",
+    "present only in original",
+    ""
+   ],
+   [
+    ".donut",
+    "present only in original",
+    ""
+   ],
+   [
+    ".legendrow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".workflow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".step",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pill",
+    "present only in original",
+    ""
+   ],
+   [
+    ".event",
+    "present only in original",
+    ""
+   ],
+   [
+    ".eventicon",
+    "present only in original",
+    ""
+   ],
+   [
+    ".footnote",
+    "present only in original",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h1",
+    [
+     "Good afternoon, Priya"
+    ],
+    []
+   ],
+   [
+    "h2",
+    [
+     "Client Queue",
+     "Rajesh Menon Tier 1"
+    ],
+    []
+   ],
+   [
+    "eyebrow",
+    [
+     "RELATIONSHIP MANAGER WORKSPACE"
+    ],
+    []
+   ],
+   [
+    "nav",
+    [
+     "\u2302 Home",
+     "\u25a6 RM Workbench",
+     "\u2659 Clients",
+     "\u2727 AI Insights",
+     "\u25ce Research & Market",
+     "\u2637 Tasks 3"
+    ],
+    []
+   ],
+   [
+    "tabs",
+    [
+     "Overview",
+     "AI Recommendations (3)",
+     "Portfolio",
+     "Goals",
+     "Risk & Suitability",
+     "Activity & Notes"
+    ],
+    []
+   ],
+   [
+    "btns",
+    [
+     "\u2726 Ask Atlas AI",
+     "\u2667 3",
+     "Sign out",
+     "\u2193 Export queue",
+     "\u2726 Ask Atlas AI",
+     "\u2691 Filters"
+    ],
+    []
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "workbench",
+  "exact": 54,
+  "total": 55,
+  "rows": [
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "\u21bb Run monitoring check"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "clientview",
+  "exact": 35,
+  "total": 36,
+  "rows": [
+   [
+    ".toast",
+    "w: 340 \u2192 286; h: 67 \u2192 46",
+    "n 1\u21921"
+   ]
+  ],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [
+     "Record demo consent request"
+    ],
+    [
+     "Record consent request"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "home",
+  "exact": 24,
+  "total": 25,
+  "rows": [
+   [
+    ".toast",
+    "present only in original",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "clients",
+  "exact": 24,
+  "total": 24,
+  "rows": [],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "insights",
+  "exact": 21,
+  "total": 21,
+  "rows": [],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "research",
+  "exact": 18,
+  "total": 31,
+  "rows": [
+   [
+    ".btn",
+    "present only in app",
+    ""
+   ],
+   [
+    ".btn.primary",
+    "present only in app",
+    ""
+   ],
+   [
+    ".cardhead",
+    "present only in app",
+    ""
+   ],
+   [
+    ".cardhead h2",
+    "present only in app",
+    ""
+   ],
+   [
+    ".twocol",
+    "present only in app",
+    ""
+   ],
+   [
+    ".pill",
+    "present only in app",
+    ""
+   ],
+   [
+    ".riskitem",
+    "present only in app",
+    ""
+   ],
+   [
+    ".risklist",
+    "present only in app",
+    ""
+   ],
+   [
+    ".tablewrap",
+    "present only in app",
+    ""
+   ],
+   [
+    "table",
+    "present only in app",
+    ""
+   ],
+   [
+    "th",
+    "present only in app",
+    ""
+   ],
+   [
+    "td",
+    "present only in app",
+    ""
+   ],
+   [
+    ".footnote",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [],
+    [
+     "Market snapshot",
+     "Headlines from official sources",
+     "Data sources status"
+    ]
+   ],
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "th",
+    [],
+    [
+     "INSTRUMENT",
+     "LAST",
+     "CHANGE",
+     "AS OF (UTC)",
+     "STATUS",
+     "SOURCE"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "\u21bb Refresh data"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "tasks",
+  "exact": 19,
+  "total": 21,
+  "rows": [
+   [
+    ".btn",
+    "fs: 14px \u2192 12px; pad: 9px 13px \u2192 6px 9px; w: 117 \u2192 60",
+    "n 4\u21925"
+   ],
+   [
+    ".btn.primary",
+    "fs: 14px \u2192 12px; pad: 9px 13px \u2192 6px 9px; w: 117 \u2192 60",
+    "n 2\u21923"
+   ]
+  ],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [
+     "View controls",
+     "Open"
+    ],
+    []
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "reports",
+  "exact": 21,
+  "total": 22,
+  "rows": [
+   [
+    ".footnote",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [
+     "Preview"
+    ],
+    []
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "settings",
+  "exact": 33,
+  "total": 41,
+  "rows": [
+   [
+    ".actions",
+    "w: 1142 \u2192 546",
+    "n 2\u21921"
+   ],
+   [
+    ".btn",
+    "fs: 12px \u2192 14px; color: rgb(23, 38, 61) \u2192 rgb(255, 255, 255); bg: rgb(255, 255, 255) \u2192 rgb(16, 40, 68); pad: 6px 9px \u2192 9px 13px",
+    "n 9\u21923"
+   ],
+   [
+    ".btn.primary",
+    "w: 153 \u2192 120",
+    "n 2\u21921"
+   ],
+   [
+    ".btn.small",
+    "present only in original",
+    ""
+   ],
+   [
+    "th",
+    "w: 333 \u2192 308",
+    "n 4\u21924"
+   ],
+   [
+    "td",
+    "w: 333 \u2192 308; h: 54 \u2192 40",
+    "n 24\u219244"
+   ],
+   [
+    ".schedule-summary",
+    "h: 106 \u2192 131",
+    "n 1\u21921"
+   ],
+   [
+    ".footnote",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30"
+    ],
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30 UTC"
+    ]
+   ],
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove"
+    ],
+    [
+     "Run now"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "modal:reviewModal",
+  "exact": 0,
+  "total": 0,
+  "rows": [],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "\u21bb Run monitoring check"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "modal:askModal",
+  "exact": 0,
+  "total": 0,
+  "rows": [],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [
+     "Generate demo answer"
+    ],
+    [
+     "\u21bb Run monitoring check",
+     "Get answer"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "modal:messageModal",
+  "exact": 0,
+  "total": 0,
+  "rows": [],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "\u21bb Run monitoring check"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "RM",
+  "view": "modal:notesModal",
+  "exact": 0,
+  "total": 0,
+  "rows": [],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "\u21bb Run monitoring check"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "Admin",
+  "view": "settings",
+  "exact": 36,
+  "total": 41,
+  "rows": [
+   [
+    "th",
+    "w: 333 \u2192 308",
+    "n 4\u21924"
+   ],
+   [
+    "td",
+    "w: 333 \u2192 308",
+    "n 24\u219244"
+   ],
+   [
+    ".schedule-summary",
+    "h: 106 \u2192 131",
+    "n 1\u21921"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ],
+   [
+    ".footnote",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30"
+    ],
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30 UTC"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "Run now"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "Admin",
+  "view": "compliance",
+  "exact": 41,
+  "total": 46,
+  "rows": [
+   [
+    ".nav",
+    "color: rgb(217, 228, 241) \u2192 rgb(255, 255, 255); bg: rgba(0, 0, 0, 0) \u2192 rgb(44, 86, 133); border: 0px rgb(217, 228, 241) \u2192 0px rgb(255, 255, 255)",
+    "n 3\u21923"
+   ],
+   [
+    ".nav.active",
+    "present only in app",
+    ""
+   ],
+   [
+    "th",
+    "w: 154 \u2192 148",
+    "n 6\u21926"
+   ],
+   [
+    "td",
+    "w: 154 \u2192 148",
+    "n 24\u219242"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": []
+ },
+ {
+  "size": "desktop",
+  "role": "Client",
+  "view": "clientportal",
+  "exact": 19,
+  "total": 21,
+  "rows": [
+   [
+    ".main",
+    "present only in original",
+    ""
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [],
+    [
+     "Your consent"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "Withdraw consent"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "desktop",
+  "role": "Client",
+  "view": "onboarding",
+  "exact": 14,
+  "total": 15,
+  "rows": [
+   [
+    ".main",
+    "present only in original",
+    ""
+   ]
+  ],
+  "text": []
+ },
+ {
+  "size": "tablet",
+  "role": "-",
+  "view": "login",
+  "exact": 10,
+  "total": 63,
+  "rows": [
+   [
+    ".topbar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".brand",
+    "present only in original",
+    ""
+   ],
+   [
+    ".search",
+    "present only in original",
+    ""
+   ],
+   [
+    ".topbutton",
+    "present only in original",
+    ""
+   ],
+   [
+    ".userchip",
+    "present only in original",
+    ""
+   ],
+   [
+    ".avatar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".sidebar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".nav",
+    "present only in original",
+    ""
+   ],
+   [
+    ".nav.active",
+    "present only in original",
+    ""
+   ],
+   [
+    ".navsep",
+    "present only in original",
+    ""
+   ],
+   [
+    ".main",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pagehead",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pagehead h1",
+    "present only in original",
+    ""
+   ],
+   [
+    ".actions",
+    "present only in original",
+    ""
+   ],
+   [
+    ".btn.small",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metrics",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric span",
+    "present only in original",
+    ""
+   ],
+   [
+    ".bubble",
+    "present only in original",
+    ""
+   ],
+   [
+    ".workgrid",
+    "present only in original",
+    ""
+   ],
+   [
+    ".card",
+    "present only in original",
+    ""
+   ],
+   [
+    ".cardhead",
+    "present only in original",
+    ""
+   ],
+   [
+    ".cardhead h2",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chip",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chip.selected",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientfilters",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow.active",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow small",
+    "present only in original",
+    ""
+   ],
+   [
+    ".status",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clienthero h2",
+    "present only in original",
+    ""
+   ],
+   [
+    ".tier",
+    "present only in original",
+    ""
+   ],
+   [
+    ".section-tabs",
+    "present only in original",
+    ""
+   ],
+   [
+    ".section-tabs button",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summarygrid",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summary",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summary strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".twocol",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chartcard",
+    "present only in original",
+    ""
+   ],
+   [
+    ".charttitle",
+    "present only in original",
+    ""
+   ],
+   [
+    ".donut",
+    "present only in original",
+    ""
+   ],
+   [
+    ".legendrow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".workflow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".step",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pill",
+    "present only in original",
+    ""
+   ],
+   [
+    ".event",
+    "present only in original",
+    ""
+   ],
+   [
+    ".eventicon",
+    "present only in original",
+    ""
+   ],
+   [
+    ".login-shell",
+    "h: 596 \u2192 612",
+    "n 1\u21921"
+   ],
+   [
+    ".login-brand",
+    "h: 596 \u2192 612",
+    "n 1\u21921"
+   ],
+   [
+    ".login-right",
+    "h: 596 \u2192 612",
+    "n 1\u21921"
+   ],
+   [
+    ".footnote",
+    "present only in original",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h1",
+    [
+     "Good afternoon, Priya"
+    ],
+    []
+   ],
+   [
+    "h2",
+    [
+     "Client Queue",
+     "Rajesh Menon Tier 1"
+    ],
+    []
+   ],
+   [
+    "eyebrow",
+    [
+     "RELATIONSHIP MANAGER WORKSPACE"
+    ],
+    []
+   ],
+   [
+    "nav",
+    [
+     "\u2302 Home",
+     "\u25a6 RM Workbench",
+     "\u2659 Clients",
+     "\u2727 AI Insights",
+     "\u25ce Research & Market",
+     "\u2637 Tasks 3"
+    ],
+    []
+   ],
+   [
+    "tabs",
+    [
+     "Overview",
+     "AI Recommendations (3)",
+     "Portfolio",
+     "Goals",
+     "Risk & Suitability",
+     "Activity & Notes"
+    ],
+    []
+   ],
+   [
+    "btns",
+    [
+     "\u2726 Ask Atlas AI",
+     "\u2667 3",
+     "Sign out",
+     "\u2193 Export queue",
+     "\u2726 Ask Atlas AI",
+     "\u2691 Filters"
+    ],
+    []
+   ]
+  ]
+ },
+ {
+  "size": "tablet",
+  "role": "RM",
+  "view": "workbench",
+  "exact": 54,
+  "total": 55,
+  "rows": [
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "\u21bb Run monitoring check"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "tablet",
+  "role": "RM",
+  "view": "settings",
+  "exact": 33,
+  "total": 42,
+  "rows": [
+   [
+    ".actions",
+    "w: 642 \u2192 296; h: 40 \u2192 90",
+    "n 2\u21921"
+   ],
+   [
+    ".btn",
+    "fs: 12px \u2192 14px; color: rgb(23, 38, 61) \u2192 rgb(255, 255, 255); bg: rgb(255, 255, 255) \u2192 rgb(16, 40, 68); pad: 6px 9px \u2192 9px 13px",
+    "n 9\u21923"
+   ],
+   [
+    ".btn.primary",
+    "w: 153 \u2192 120",
+    "n 2\u21921"
+   ],
+   [
+    ".btn.small",
+    "present only in original",
+    ""
+   ],
+   [
+    "th",
+    "w: 279 \u2192 308",
+    "n 4\u21924"
+   ],
+   [
+    "td",
+    "w: 279 \u2192 308; h: 54 \u2192 40",
+    "n 24\u219244"
+   ],
+   [
+    ".schedule-summary",
+    "h: 136 \u2192 161",
+    "n 1\u21921"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ],
+   [
+    ".footnote",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30"
+    ],
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30 UTC"
+    ]
+   ],
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove"
+    ],
+    [
+     "Run now"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "tablet",
+  "role": "Admin",
+  "view": "settings",
+  "exact": 36,
+  "total": 41,
+  "rows": [
+   [
+    "th",
+    "w: 279 \u2192 308",
+    "n 4\u21924"
+   ],
+   [
+    "td",
+    "w: 279 \u2192 308",
+    "n 24\u219244"
+   ],
+   [
+    ".schedule-summary",
+    "h: 136 \u2192 161",
+    "n 1\u21921"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ],
+   [
+    ".footnote",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30"
+    ],
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30 UTC"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "Run now"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "tablet",
+  "role": "Admin",
+  "view": "compliance",
+  "exact": 42,
+  "total": 46,
+  "rows": [
+   [
+    ".nav",
+    "color: rgb(217, 228, 241) \u2192 rgb(255, 255, 255); bg: rgba(0, 0, 0, 0) \u2192 rgb(44, 86, 133); border: 0px rgb(217, 228, 241) \u2192 0px rgb(255, 255, 255)",
+    "n 3\u21923"
+   ],
+   [
+    ".nav.active",
+    "present only in app",
+    ""
+   ],
+   [
+    "td",
+    "h: 58 \u2192 40",
+    "n 24\u219266"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": []
+ },
+ {
+  "size": "tablet",
+  "role": "Client",
+  "view": "clientportal",
+  "exact": 19,
+  "total": 21,
+  "rows": [
+   [
+    ".main",
+    "present only in original",
+    ""
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [],
+    [
+     "Your consent"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "Withdraw consent"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "mobile",
+  "role": "-",
+  "view": "login",
+  "exact": 13,
+  "total": 61,
+  "rows": [
+   [
+    ".topbar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".brand",
+    "present only in original",
+    ""
+   ],
+   [
+    ".topbutton",
+    "present only in original",
+    ""
+   ],
+   [
+    ".userchip",
+    "present only in original",
+    ""
+   ],
+   [
+    ".avatar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".sidebar",
+    "present only in original",
+    ""
+   ],
+   [
+    ".nav",
+    "present only in original",
+    ""
+   ],
+   [
+    ".nav.active",
+    "present only in original",
+    ""
+   ],
+   [
+    ".main",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pagehead",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pagehead h1",
+    "present only in original",
+    ""
+   ],
+   [
+    ".actions",
+    "present only in original",
+    ""
+   ],
+   [
+    ".btn.small",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metrics",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".metric span",
+    "present only in original",
+    ""
+   ],
+   [
+    ".bubble",
+    "present only in original",
+    ""
+   ],
+   [
+    ".workgrid",
+    "present only in original",
+    ""
+   ],
+   [
+    ".card",
+    "present only in original",
+    ""
+   ],
+   [
+    ".cardhead",
+    "present only in original",
+    ""
+   ],
+   [
+    ".cardhead h2",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chip",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chip.selected",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientfilters",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow.active",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clientrow small",
+    "present only in original",
+    ""
+   ],
+   [
+    ".status",
+    "present only in original",
+    ""
+   ],
+   [
+    ".clienthero h2",
+    "present only in original",
+    ""
+   ],
+   [
+    ".tier",
+    "present only in original",
+    ""
+   ],
+   [
+    ".section-tabs",
+    "present only in original",
+    ""
+   ],
+   [
+    ".section-tabs button",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summarygrid",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summary",
+    "present only in original",
+    ""
+   ],
+   [
+    ".summary strong",
+    "present only in original",
+    ""
+   ],
+   [
+    ".twocol",
+    "present only in original",
+    ""
+   ],
+   [
+    ".chartcard",
+    "present only in original",
+    ""
+   ],
+   [
+    ".charttitle",
+    "present only in original",
+    ""
+   ],
+   [
+    ".donut",
+    "present only in original",
+    ""
+   ],
+   [
+    ".legendrow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".workflow",
+    "present only in original",
+    ""
+   ],
+   [
+    ".step",
+    "present only in original",
+    ""
+   ],
+   [
+    ".pill",
+    "present only in original",
+    ""
+   ],
+   [
+    ".event",
+    "present only in original",
+    ""
+   ],
+   [
+    ".eventicon",
+    "present only in original",
+    ""
+   ],
+   [
+    ".footnote",
+    "present only in original",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h1",
+    [
+     "Good afternoon, Priya"
+    ],
+    []
+   ],
+   [
+    "h2",
+    [
+     "Client Queue",
+     "Rajesh Menon Tier 1"
+    ],
+    []
+   ],
+   [
+    "eyebrow",
+    [
+     "RELATIONSHIP MANAGER WORKSPACE"
+    ],
+    []
+   ],
+   [
+    "nav",
+    [
+     "\u2302 Home",
+     "\u25a6 RM Workbench",
+     "\u2659 Clients",
+     "\u2727 AI Insights",
+     "\u25ce Research & Market",
+     "\u2637 Tasks 3"
+    ],
+    []
+   ],
+   [
+    "tabs",
+    [
+     "Overview",
+     "AI Recommendations (3)",
+     "Portfolio",
+     "Goals",
+     "Risk & Suitability",
+     "Activity & Notes"
+    ],
+    []
+   ],
+   [
+    "btns",
+    [
+     "\u2726 Ask Atlas AI",
+     "\u2667 3",
+     "Sign out",
+     "\u2193 Export queue",
+     "\u2726 Ask Atlas AI",
+     "\u2691 Filters"
+    ],
+    []
+   ]
+  ]
+ },
+ {
+  "size": "mobile",
+  "role": "RM",
+  "view": "workbench",
+  "exact": 51,
+  "total": 53,
+  "rows": [
+   [
+    ".clienthero h2",
+    "w: 181 \u2192 177",
+    "n 1\u21921"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "\u21bb Run monitoring check"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "mobile",
+  "role": "RM",
+  "view": "settings",
+  "exact": 29,
+  "total": 39,
+  "rows": [
+   [
+    ".actions",
+    "h: 72 \u2192 90",
+    "n 2\u21921"
+   ],
+   [
+    ".btn",
+    "fs: 12px \u2192 14px; color: rgb(23, 38, 61) \u2192 rgb(255, 255, 255); bg: rgb(255, 255, 255) \u2192 rgb(16, 40, 68); pad: 6px 9px \u2192 9px 13px",
+    "n 9\u21923"
+   ],
+   [
+    ".btn.primary",
+    "w: 153 \u2192 120",
+    "n 2\u21921"
+   ],
+   [
+    ".btn.small",
+    "present only in original",
+    ""
+   ],
+   [
+    "th",
+    "w: 279 \u2192 308",
+    "n 4\u21924"
+   ],
+   [
+    "td",
+    "w: 279 \u2192 308; h: 54 \u2192 40",
+    "n 24\u219244"
+   ],
+   [
+    ".calloutnote",
+    "h: 74 \u2192 92",
+    "n 2\u21922"
+   ],
+   [
+    ".schedule-summary",
+    "h: 106 \u2192 161",
+    "n 1\u21921"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ],
+   [
+    ".footnote",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30"
+    ],
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30 UTC"
+    ]
+   ],
+   [
+    "nav",
+    [
+     "\u2637 Tasks 3"
+    ],
+    [
+     "\u2637 Tasks 5"
+    ]
+   ],
+   [
+    "btns",
+    [
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove",
+     "Remove"
+    ],
+    [
+     "Run now"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "mobile",
+  "role": "Admin",
+  "view": "settings",
+  "exact": 33,
+  "total": 38,
+  "rows": [
+   [
+    "th",
+    "w: 279 \u2192 308",
+    "n 4\u21924"
+   ],
+   [
+    "td",
+    "w: 279 \u2192 308",
+    "n 24\u219244"
+   ],
+   [
+    ".schedule-summary",
+    "h: 106 \u2192 161",
+    "n 1\u21921"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ],
+   [
+    ".footnote",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30"
+    ],
+    [
+     "Weekly \u00b7 Mon, Wed, Fri \u00b7 08:30 UTC"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "Run now"
+    ]
+   ]
+  ]
+ },
+ {
+  "size": "mobile",
+  "role": "Admin",
+  "view": "compliance",
+  "exact": 39,
+  "total": 44,
+  "rows": [
+   [
+    ".nav",
+    "color: rgb(217, 228, 241) \u2192 rgb(255, 255, 255); bg: rgba(0, 0, 0, 0) \u2192 rgb(44, 86, 133); border: 0px rgb(217, 228, 241) \u2192 0px rgb(255, 255, 255)",
+    "n 1\u21921"
+   ],
+   [
+    ".nav.active",
+    "present only in app",
+    ""
+   ],
+   [
+    "td",
+    "h: 58 \u2192 40",
+    "n 24\u219284"
+   ],
+   [
+    ".notice",
+    "h: 74 \u2192 92",
+    "n 1\u21921"
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": []
+ },
+ {
+  "size": "mobile",
+  "role": "Client",
+  "view": "clientportal",
+  "exact": 19,
+  "total": 21,
+  "rows": [
+   [
+    ".main",
+    "present only in original",
+    ""
+   ],
+   [
+    ".toast",
+    "present only in app",
+    ""
+   ]
+  ],
+  "text": [
+   [
+    "h2",
+    [],
+    [
+     "Your consent"
+    ]
+   ],
+   [
+    "btns",
+    [],
+    [
+     "Withdraw consent"
+    ]
+   ]
+  ]
+ }
+]

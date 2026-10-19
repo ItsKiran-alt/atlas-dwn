@@ -1,0 +1,15 @@
+.venv/
+.venv312/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.streamlit/secrets.toml
+.claude/
+/data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+smoke_server.log

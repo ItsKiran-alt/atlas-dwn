@@ -1,0 +1,28 @@
+﻿name: scheduler
+# Streamlit hosting cannot run background jobs, so this workflow is the clock.
+# GitHub cron can be delayed or dropped under load, runs only on the default branch, and in a PUBLIC repo is switched off after 60 days without repository activity; a missed slot is recorded as "missed", never silently run late.
+on:
+  schedule:
+    - cron: "7,37 * * * *"
+  workflow_dispatch: {}
+concurrency:
+  group: dwn-scheduler
+  cancel-in-progress: false
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python worker/run_scheduled.py --once
+        env:
+          DWN_ENV: prod
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DWN_LLM_PROVIDER: ${{ vars.DWN_LLM_PROVIDER }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

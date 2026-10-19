@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="atlas.css">
+<style>html,body{margin:0;background:var(--bg)}</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/* Atlas UI shell. Presentation and pure-UI behaviour only (tabs, filters, modals, form toggles).
+   Every action that changes data, permissions or workflow state is sent to the Python server via act().
+   No authentication, authorisation or client data logic lives here. */
+let ARGS = null, selectedRole = 'RM', lastRenderKey = null, lastEffect = null;
+const ui = {view: null, subtab: 'overview', queueKind: 'all', period: '1Y', modals: []};
+const PRESERVE = ['askQuestion','queueSearch','clientBookSearch','auditSearch','auditAction','scheduleClientSearch','scheduleName','scheduleFrequency','scheduleTime','monthDay','scheduleClients','scheduleEnabled','enableClientSelection','scopeMonitor','scopeRisk','scopeGoals','scopeEvents','scopeDrafts','rmNote','noteText','messageSubject','messageBody','rationale','targetEquity','decision','approvalTier','newDataSource','onboardingClientEmail','consentTerms','consentAI'];
+
+/* ---------- Streamlit component protocol ---------- */
+function post(type, extra) { window.parent.postMessage(Object.assign({isStreamlitMessage: true, type: type}, extra || {}), '*'); }
+function send(value) { post('streamlit:setComponentValue', {value: value, dataType: 'json'}); }
+function act(action, payload) {
+  send({id: Date.now() + '-' + Math.random().toString(36).slice(2), action: action, payload: payload || {}, ui: {view: ui.view, subtab: ui.subtab}});
+}
+window.addEventListener('message', function (ev) {
+  if (!ev.data || ev.data.type !== 'streamlit:render') return;
+  ARGS = ev.data.args || {};
+  render();
+});
+post('streamlit:componentReady', {apiVersion: 1});
+post('streamlit:setFrameHeight', {height: 900});
+
+/* ---------- rendering ---------- */
+function snapshot() {
+  const s = {};
+  PRESERVE.forEach(id => { const el = document.getElementById(id); if (!el) return; s[id] = el.type === 'checkbox' ? el.checked : el.value; });
+  document.querySelectorAll('[name="scheduleDay"]').forEach(el => { s['day:' + el.value] = el.checked; });
+  document.querySelectorAll('.schedule-client-check').forEach(el => { s['client:' + el.value] = el.checked; });
+  return s;
+}
+function restore(s, skip) {
+  Object.keys(s).forEach(k => {
+    if (skip && skip.indexOf(k) >= 0) return;
+    if (k.startsWith('day:')) { const el = document.querySelector('[name="scheduleDay"][value="' + k.slice(4) + '"]'); if (el) el.checked = s[k]; return; }
+    if (k.startsWith('client:')) { const el = document.querySelector('.schedule-client-check[value="' + k.slice(7) + '"]'); if (el) el.checked = s[k]; return; }
+    const el = document.getElementById(k); if (!el) return;
+    if (el.type === 'checkbox') el.checked = s[k]; else el.value = s[k];
+  });
+}
+function render() {
+  const root = document.getElementById('root');
+  const key = ARGS.render_key;
+  if (key !== lastRenderKey) {
+    const snap = snapshot();
+    root.innerHTML = ARGS.html;
+    lastRenderKey = key;
+    document.body.dataset.role = ARGS.role || '';
+    restore(snap, ARGS.fresh_fields || []);
+    (ARGS.fresh_fields || []).forEach(() => {});
+    wire();
+    updateClientScopePicker(true);
+    if (document.getElementById('scheduleFrequency')) { updateScheduleFields(); }
+  }
+  const eff = ARGS.effect;
+  if (eff && eff.id !== lastEffect) {
+    lastEffect = eff.id;
+    if (eff.view) ui.view = eff.view;
+    if (eff.subtab) ui.subtab = eff.subtab;
+    if (eff.reset_modals) ui.modals = [];
+    applyView();
+    if (eff.open_modal) openModal(eff.open_modal);
+    if (eff.ask_answer !== undefined) showAsk(eff.ask_answer);
+    if (eff.close_modal) closeModal(eff.close_modal);
+    if (eff.download) download(eff.download);
+    if (eff.toast) toast(eff.toast);
+    if (eff.select_role) { selectedRole = eff.select_role; }
+  } else { applyView(); }
+  ui.modals.forEach(id => { const m = document.getElementById(id); if (m) m.classList.add('open'); });
+  post('streamlit:setFrameHeight', {height: window.innerHeight || 900});
+}
+function applyView() {
+  if (!ARGS) return;
+  const allowed = ARGS.allowed || [];
+  if (!ui.view || !allowed.includes(ui.view)) ui.view = ARGS.default_view;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  const t = document.getElementById('view-' + ui.view); if (t) t.classList.add('active');
+  document.querySelectorAll('.nav').forEach(n => n.classList.toggle('active', n.dataset.view === ui.view || (ui.view === 'clientview' && n.dataset.view === 'workbench')));
+  // sub-tab
+  const btns = document.querySelectorAll('.section-tabs button');
+  const names = ['overview','recommendations','portfolio','goals','risk','activity'];
+  btns.forEach((b, i) => b.classList.toggle('active', names[i] === ui.subtab));
+  document.querySelectorAll('.subview').forEach(v => v.classList.toggle('active', v.id === 'sub-' + ui.subtab));
+  // queue filter
+  document.querySelectorAll('#queueFilters .chip').forEach(c => { const m = (c.getAttribute('onclick') || '').match(/filterQueue\('(\w+)'/); if (m) c.classList.toggle('selected', m[1] === ui.queueKind); });
+  if (document.getElementById('queue')) searchQueue();
+  const p = document.getElementById('performanceValue');
+  if (p && p.dataset.perf) { try { p.textContent = JSON.parse(p.dataset.perf)[ui.period]; } catch (e) {} }
+  document.querySelectorAll('.charttitle .actions .chip').forEach(c => c.classList.toggle('selected', c.textContent.trim() === ui.period));
+}
+function wire() {
+  const gs = document.getElementById('globalSearch');
+  if (gs) gs.addEventListener('keydown', e => { if (e.key === 'Enter') { const q = e.target.value.toLowerCase(); const row = [...document.querySelectorAll('.clientrow')].find(r => r.dataset.name.includes(q)); if (row) selectClient(row.dataset.id); else if (q) toast('No matching client in your queue.'); } });
+  document.querySelectorAll('.modalback').forEach(m => m.addEventListener('click', e => { if (e.target === m) closeModal(m.id); }));
+  const sc = document.getElementById('scheduleClients'); if (sc) sc.addEventListener('change', () => updateClientScopePicker(false));
+  const en = document.getElementById('enableClientSelection'); if (en) en.addEventListener('change', e => { document.getElementById('clientSelectionPanel').classList.toggle('hidden', !e.target.checked); updateScheduleSummary(); });
+  ['scheduleFrequency','scheduleTime','monthDay'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('change', updateScheduleSummary); });
+  document.querySelectorAll('[name="scheduleDay"]').forEach(el => el.addEventListener('change', updateScheduleSummary));
+  document.querySelectorAll('.schedule-client-check').forEach(el => el.addEventListener('change', updateSelectedClientCount));
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.modalback').forEach(m => m.classList.remove('open')); ui.modals = []; } });
+
+/* ---------- pure UI helpers ---------- */
+function toast(msg) { const t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.remove('show'); void t.offsetWidth; t.classList.add('show'); clearTimeout(window._tt); window._tt = setTimeout(() => t.classList.remove('show'), 3400); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c])); }
+function openModal(id) { const m = document.getElementById(id); if (m) { m.classList.add('open'); if (!ui.modals.includes(id)) ui.modals.push(id); } }
+function closeModal(id) { const m = document.getElementById(id); if (m) m.classList.remove('open'); ui.modals = ui.modals.filter(x => x !== id); }
+function setView(name) {
+  if (!ARGS) return;
+  if (name === 'settings' && ARGS.settings_denied) { toast('Your administrator has not enabled scheduling access.'); return; }
+  if (!(ARGS.allowed || []).includes(name)) { toast('This view is not available for your role.'); return; }
+  ui.view = name; applyView(); window.scrollTo({top: 0, behavior: 'smooth'});
+  if (name === 'research') act('market_refresh_if_stale');
+}
+function setMain(name) { setView(name); }
+function setSubtab(name) { ui.subtab = name; applyView(); }
+function filterQueue(kind) { ui.queueKind = kind; applyView(); }
+function toggleFilters() { document.getElementById('filterSearch').classList.toggle('hidden'); }
+function searchQueue() { const el = document.getElementById('queueSearch'); const q = el ? el.value.toLowerCase() : ''; document.querySelectorAll('.clientrow').forEach(r => r.style.display = r.dataset.name.includes(q) && (ui.queueKind === 'all' || r.dataset.kind === ui.queueKind) ? 'grid' : 'none'); }
+function setPeriod(p) { ui.period = p; applyView(); }
+function filterClientBook() { const q = (document.getElementById('clientBookSearch').value || '').toLowerCase(); let v = 0; document.querySelectorAll('#clientBookList .riskitem').forEach(r => { const s = r.innerText.toLowerCase().includes(q); r.style.display = s ? 'flex' : 'none'; if (s) v++; }); document.getElementById('clientBookEmpty').style.display = v ? 'none' : 'block'; }
+function filterAudit() { const q = document.getElementById('auditSearch').value.toLowerCase(); const a = document.getElementById('auditAction').value; document.querySelectorAll('#auditBody tr').forEach(r => { const t = r.innerText.toLowerCase(); r.style.display = (t.includes(q) && (a === 'all' || r.dataset.action === a)) ? '' : 'none'; }); }
+function download(d) { const b = new Blob([d.content], {type: d.mime || 'text/plain'}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = d.filename; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+function showAsk(text) { const a = document.getElementById('askAnswer'); if (!a) return; a.classList.remove('hidden'); a.innerHTML = '<b>Answer</b><p>' + escapeHtml(text) + '</p><small>Based on stored demo records. Verify calculations, source data and policy before taking action.</small>'; }
+
+/* ---------- login / onboarding ---------- */
+function chooseRole(role, el) { selectedRole = role; document.querySelectorAll('.rolecard').forEach(c => c.classList.remove('selected')); el.classList.add('selected'); if (!(ARGS && ARGS.demo_defaults)) return; const d = {Admin: ['admin@atlas-demo.com', 'atlas-demo'], RM: ['priya.sharma@atlas-demo.com', 'atlas-demo'], Client: ['ramesh.agarwal@atlas-demo.com', 'atlas-demo']}[role]; document.getElementById('loginEmail').value = d[0]; document.getElementById('loginPassword').value = ARGS.demo_pw_known ? d[1] : ''; }
+function demoLogin() { const em = document.getElementById('loginEmail').value.trim(), pw = document.getElementById('loginPassword').value; if (!em || !pw) { toast('Enter an email and password.'); return; } act('login', {email: em, password: pw, role: selectedRole}); }
+function logoutDemo() { ui.view = null; ui.modals = []; act('logout'); }
+function startClientSignup() { act('start_signup'); }
+function acceptOnboardingConsent() { act('accept_consent', {email: document.getElementById('onboardingClientEmail').value, password: document.getElementById('onboardingPassword').value, password2: document.getElementById('onboardingPassword2').value, terms: document.getElementById('consentTerms').checked, ai: document.getElementById('consentAI').checked}); }
+
+/* ---------- RM workflow (server-side effects) ---------- */
+function selectClient(id, review, goto) { act('select_client', {id: id, review: !!review, goto: goto || ''}); }
+function openClientFromBook(id) { act('select_client', {id: id, goto: 'workbench'}); }
+function openReview() { openModal('reviewModal'); }
+function openAsk() { openModal('askModal'); }
+function openClientMessage() { openModal('messageModal'); }
+function openNotes() { openModal('notesModal'); }
+function openCrm() { openModal('crmModal'); }
+function openHistory() { openModal('historyModal'); }
+function runAgent() { act('run_agent'); }
+function saveReview() { act('save_review', {convo: !!(document.getElementById('convoHeld') && document.getElementById('convoHeld').checked), note: document.getElementById('rmNote').value, decision: document.getElementById('decision').value, tier: document.getElementById('approvalTier').value, target: document.getElementById('targetEquity').value, rationale: document.getElementById('rationale').value}); }
+function saveNote() { act('save_note', {text: document.getElementById('noteText').value}); }
+function markDraftReady() { act('mark_draft_ready', {subject: document.getElementById('messageSubject').value, body: document.getElementById('messageBody').value}); }
+function answerAsk() { act('ask', {question: document.getElementById('askQuestion').value}); }
+function askPrompt(q) { document.getElementById('askQuestion').value = q; answerAsk(); }
+
+/* ---------- admin ---------- */
+function saveRMAccess() { act('save_perms', {rm: document.getElementById('permissionRM').value, schedule: document.getElementById('permSchedule').checked, all_clients: document.getElementById('permAllClients').checked, approval: document.getElementById('permApproval').value, override: document.getElementById('permOverride').checked}); }
+function addDataSource() { const s = document.getElementById('newDataSource'); if (s) act('source', {id: s.value, on: true}); }
+
+/* ---------- scheduler ---------- */
+function updateScheduleFields() { const f = document.getElementById('scheduleFrequency').value; document.getElementById('weeklyField').classList.toggle('hidden', f !== 'weekly'); document.getElementById('monthlyField').classList.toggle('hidden', f !== 'monthly'); updateScheduleSummary(); }
+function getScheduleDescription() { const f = document.getElementById('scheduleFrequency').value; const time = document.getElementById('scheduleTime').value || '08:30'; if (f === 'daily') return 'Daily at ' + time + ' UTC'; if (f === 'monthly') return 'Monthly on day ' + document.getElementById('monthDay').selectedOptions[0].text + ' at ' + time + ' UTC'; const days = [...document.querySelectorAll('[name="scheduleDay"]:checked')].map(x => x.value); return 'Weekly · ' + (days.length ? days.join(', ') : 'no days selected') + ' · ' + time + ' UTC'; }
+function updateScheduleSummary() { const en = document.getElementById('scheduleEnabled'); if (!en) return; const label = document.getElementById('nextRunLabel'); label.textContent = en.checked ? getScheduleDescription() : 'Schedule paused'; const scope = document.getElementById('scheduleClients').value; let extra = ''; if (scope === 'Selected client only' && document.getElementById('enableClientSelection').checked) { const chosen = [...document.querySelectorAll('.schedule-client-check:checked')].map(c => c.nextElementSibling.textContent); extra = chosen.length ? ' · ' + chosen.length + ' selected: ' + chosen.slice(0, 3).join(', ') + (chosen.length > 3 ? '…' : '') : ' · no clients selected'; } document.getElementById('scheduleSummaryText').textContent = (en.checked ? 'Enabled · ' : 'Paused · ') + scope + extra; }
+function updateSelectedClientCount() { const n = document.querySelectorAll('.schedule-client-check:checked').length; const el = document.getElementById('selectedClientCount'); if (el) el.textContent = n + ' client' + (n === 1 ? '' : 's') + ' selected'; updateScheduleSummary(); }
+function updateClientScopePicker(silent) { const sc = document.getElementById('scheduleClients'); if (!sc) return; const sel = sc.value === 'Selected client only'; document.getElementById('selectedClientPicker').classList.toggle('hidden', !sel); if (!sel) { document.getElementById('enableClientSelection').checked = false; document.getElementById('clientSelectionPanel').classList.add('hidden'); } if (!silent) updateScheduleSummary(); }
+function filterScheduleClients() { const q = (document.getElementById('scheduleClientSearch').value || '').toLowerCase(); document.querySelectorAll('#scheduleClientList label').forEach(l => l.style.display = l.dataset.clientName.includes(q) ? 'flex' : 'none'); }
+function scheduleConfig() {
+  return {name: document.getElementById('scheduleName').value, frequency: document.getElementById('scheduleFrequency').value, time: document.getElementById('scheduleTime').value,
+    days: [...document.querySelectorAll('[name="scheduleDay"]:checked')].map(x => x.value), month_day: document.getElementById('monthDay').value,
+    scopes: ['scopeMonitor:Portfolio drift', 'scopeRisk:Risk & scenarios', 'scopeGoals:Goal progress', 'scopeEvents:Market events', 'scopeDrafts:RM draft recommendations'].filter(s => document.getElementById(s.split(':')[0]).checked).map(s => s.split(':')[1]),
+    client_scope: document.getElementById('scheduleClients').value, enabled: document.getElementById('scheduleEnabled').checked,
+    clients: document.getElementById('enableClientSelection').checked ? [...document.querySelectorAll('.schedule-client-check:checked')].map(c => c.value) : []};
+}
+function saveSchedule() {
+  const c = scheduleConfig();
+  if (c.frequency === 'weekly' && !c.days.length) { toast('Select at least one day for a weekly schedule.'); return; }
+  if (c.client_scope === 'Selected client only') { if (!document.getElementById('enableClientSelection').checked) { toast('Tick “Choose specific clients” and select at least one client.'); return; } if (!c.clients.length) { toast('Select at least one client for this schedule.'); return; } }
+  act('save_schedule', {cfg: c});
+}
+function runScheduleNow() { act('run_preview', {cfg: scheduleConfig()}); }
+function runNow() { act('run_now', {cfg: scheduleConfig()}); }
+</script>
+</body>
+</html>
