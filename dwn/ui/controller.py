@@ -45,6 +45,7 @@ class ViewData:
         self.msg_stats = repo.recent_message_stats(ids) if user.role == "RM" else {}
         self.msg_unread = sum(s["unread"] for s in self.msg_stats.values())
         self.thread = repo.messages_for(selected.id) if selected and user.role in ("RM", "Client") else []
+        self.notifications = repo.notifications_for(selected.id) if selected and user.role == "Client" else []
         self._hist, self._perf = None, {}
         self.market = MarketService(repo).view() if user.role in ("RM", "Admin") else []
         self.market_by_symbol = {r["symbol"]: r for r in self.market}
@@ -254,7 +255,10 @@ def handle(repo: Repo, sess: dict, ev: dict) -> None:
             _effect(sess, toast="Preference saved.")
         elif act == "ask":
             c, _ = _active_client(repo, user, sess)
-            _effect(sess, ask_answer=services.answer_question(repo, user, c.id if c else None, p.get("question", "")))
+            if user.role == "Client":
+                _effect(sess, ask_answer=services.answer_client_question(repo, user, p.get("question", "")))
+            else:
+                _effect(sess, ask_answer=services.answer_question(repo, user, c.id if c else None, p.get("question", "")))
         elif act == "detail":
             c, _ = _active_client(repo, user, sess)
             if p.get("what") == "market":
@@ -283,6 +287,12 @@ def handle(repo: Repo, sess: dict, ev: dict) -> None:
             repo.s.commit()
             text, how = services.draft_reply(repo, user, c.id)
             _effect(sess, fill=dict(id="replyBody", text=text), toast=f"Draft prepared by {how}. Read and edit it before sending; nothing was sent.")
+        elif act == "client_approval":
+            services.respond_to_approval_request(repo, user, p.get("decision", ""))
+            _effect(sess, toast="Thank you. Your answer has been sent to your Relationship Manager.")
+        elif act == "notifications_seen":
+            services.mark_notifications_read(repo, user)
+            _effect(sess)
         elif act == "chat_seen":
             c, _ = _active_client(repo, user, sess)
             services.mark_thread_read(repo, user, c.id if c else None)
@@ -387,10 +397,11 @@ def _build(repo: Repo, sess: dict) -> dict:
     c, clients = _active_client(repo, user, sess)
     vd = ViewData(repo, user, clients, c)
     if user.role == "Client":
-        html = ('<div class="app" id="appShell"><div class="layout">' + R.client_portal(vd, user) + '</div></div>'
-                '<div class="toast" id="toast"></div>')
+        html = ('<div class="app" id="appShell">' + R._client_topbar(user, vd) + '<div class="layout">' + R.client_portal(vd, user) + '</div></div>'
+                + R._ask_modal(client=True) + '<div class="toast" id="toast"></div>')
         payload = dict(html=html, role="Client", allowed=["clientportal"], default_view="clientportal", poll_chat=True,
-                       chat_unread=sum(1 for m in vd.thread if m["role"] == "RM" and not m["read"]))
+                       chat_unread=sum(1 for m in vd.thread if m["role"] == "RM" and not m["read"]),
+                       notif_unread=sum(1 for n in vd.notifications if not n["read"]))
         payload.update(_finish(html, effect, sess))
         return payload
     pick = services.clients_for(repo, user, for_scheduling=True)

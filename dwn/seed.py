@@ -180,3 +180,10 @@ DATA_SOURCES = [
 # Demo-only accounts. Passwords are verified against PBKDF2 hashes (dwn/auth.py); real auth arrives in Phase 3.
 DEMO_PASSWORD = "atlas-demo"
 ADMIN_EMAIL = "admin@atlas-demo.com"
+
+
+def meeting_date(client_id: str, today=None) -> str:
+    """A believable upcoming 'next meeting' (6 to 95 days ahead), different per client, e.g. '28 Oct 2026'."""
+    from datetime import date, timedelta
+    d = (today or date.today()) + timedelta(days=6 + _h(client_id, "meeting") % 90)
+    return f"{d.day} {d:%b %Y}"

@@ -53,6 +53,37 @@ def onboarding() -> str:
 
 
 # ------------------------------------------------------------------ client portal
+def consent_cell(rec, prop) -> tuple[str, str]:
+    """What to show for 'Client consent' in the workflow. Tier 1 and 2 never need the client's approval; Tier 3 does."""
+    tier = (prop["tier"] if prop else None) or services._tier_number(rec.tier)
+    if prop is None and rec.status in ("Draft", "Monitor"):
+        return "Tier 3 only", "muted"
+    if tier in ("1", "2"):
+        return "Not required", "muted"
+    return {"pending": ("Awaiting client", "warn"), "approved": ("Approved by client", "good"), "meeting_requested": ("Meeting requested", "warn")}.get(rec.client_approval, ("Pending", "warn"))
+
+
+def _client_topbar(user: User, store) -> str:
+    """Header for the client portal: company name, Ask Atlas AI, notifications and messages."""
+    notes = store.notifications
+    n_new = sum(1 for n in notes if not n["read"])
+    n_msg = sum(1 for m in store.thread if m["role"] == "RM" and not m["read"])
+    items = "".join(
+        f'<div class="notifitem{"" if n["read"] else " unread"}"><b>{e(n["title"])}</b>{"" if n["read"] else " <span class=\"chip red\">new</span>"}<p>{e(n["body"])}</p><small>{n["at"]:%d %b %H:%M} UTC</small></div>'
+        for n in notes) or '<p class="muted" style="padding:10px">No notifications yet.</p>'
+    return f'''<header class="topbar clientbar">
+  <div class="brand">ATLAS<small>WEALTH MANAGEMENT</small></div>
+  <div class="topright">
+    <button class="topbutton" onclick="openAsk()">✦ Ask Atlas AI</button>
+    <div class="notifwrap"><button class="topbutton" id="notifBtn" onclick="toggleNotifications({n_new})" aria-label="Notifications">♧ <span class="badgecount{"" if n_new else " zero"}">{n_new}</span></button>
+      <div class="notifpanel" id="notifPanel"><div class="notifhead"><b>Notifications</b></div>{items}</div></div>
+    <button class="topbutton" onclick="openMessages()" aria-label="Messages">✉ <span class="badgecount{"" if n_msg else " zero"}">{n_msg}</span></button>
+    <button class="topbutton" onclick="logoutDemo()">Sign out</button>
+    <div class="userchip"><div class="avatar">{e(user.initials)}</div><span><b>{e(user.name)}</b><br><span style="opacity:.7">Client</span></span></div>
+  </div>
+</header>'''
+
+
 def client_portal(store: Store, user: User) -> str:
     c = store.client(user.client_id)
     rows = holding_shares(c.holdings)
@@ -99,21 +130,43 @@ def _portal_dashboard(store, c, perf) -> str:
             f'<div class="card" style="margin-top:16px">{perf_html}</div>')
 
 
-def _thread_html(thread: list, me_role: str) -> str:
+def _thread_html(thread: list, me_role: str, approval: str = "", approval_open: bool = False) -> str:
     if not thread:
         return '<p class="muted" style="margin:8px 0">No messages yet. Write the first one below.</p>'
     out = []
+    last_req = max((m["id"] for m in thread if m.get("kind") == "consent_request"), default=0)
     for m in thread:
         mine = m["role"] == me_role
         new = "" if (mine or m["read"]) else ' <span class="chip red">new</span>'
-        out.append(f'<div class="msg {"mine" if mine else "theirs"}"><div class="msgmeta">{e(m["name"])} · {m["at"]:%d %b %H:%M} UTC{new}</div><div>{e(m["body"]).replace(chr(10), "<br>")}</div></div>')
+        extra = ""
+        if m.get("kind") == "consent_request" and m["id"] == last_req:
+            state = {"pending": "Waiting for the client", "approved": "Approved by the client", "meeting_requested": "Client asked for a meeting"}.get(approval, "")
+            if me_role == "Client" and approval_open:
+                extra = ('<div class="msgactions"><button class="btn small primary" onclick="act(\'client_approval\',{decision:\'approve\'})">Approve</button>'
+                         + ('<button class="btn small" onclick="act(\'client_approval\',{decision:\'meeting\'})">Request a meeting</button>' if approval == "pending" else "")
+                         + ('<span class="muted" style="font-size:11px">You asked for a meeting. You can still approve later.</span>' if approval == "meeting_requested" else "") + '</div>')
+            elif state:
+                extra = f'<div class="msgactions"><span class="chip amber">{state}</span></div>'
+        out.append(f'<div class="msg {"mine" if mine else "theirs"}"><div class="msgmeta">{e(m["name"])} · {m["at"]:%d %b %H:%M} UTC{new}</div><div>{e(m["body"]).replace(chr(10), "<br>")}</div>{extra}</div>')
     return "".join(out)
+
+
+def _approval_state(store, c) -> str:
+    return store.rec(c.id).client_approval if c else ""
+
+
+def _approval_open(store, c) -> bool:
+    """The client may answer only while a Tier 3 request is open (and its proposal is still waiting for the second approver)."""
+    if store.rec(c.id).client_approval not in ("pending", "meeting_requested"):
+        return False
+    p = store.proposals.get(c.id)
+    return p is None or p["status"] == "awaiting_second"
 
 
 def _chat_card(store, c, role: str) -> str:
     rm = next((r.name for r in store.rms if r.id == c.rm_id), "your Relationship Manager")
     return (f'<div class="card" style="margin-top:16px" id="chatCard"><div class="cardhead"><div><h2>Message {e(rm)}</h2><div class="sub">Secure messages with your Relationship Manager</div></div></div>'
-            f'<div class="chatlog" id="chatLog">{_thread_html(store.thread, role)}</div>'
+            f'<div class="chatlog" id="chatLog">{_thread_html(store.thread, role, _approval_state(store, c), _approval_open(store, c))}</div>'
             f'<div class="field"><label for="chatBody">Your message</label><textarea id="chatBody" maxlength="{services.MSG_MAX_CHARS}" placeholder="Ask a question about your portfolio, your goals or a recommendation…"></textarea></div>'
             f'<div class="actions"><button class="btn primary" onclick="sendChat(\'chatBody\')">Send message</button></div>'
             f'<div class="footnote">Plain text only. Do not share passwords or card numbers here. Messages are not trading instructions; the AI never trades on its own.</div></div>')
@@ -132,7 +185,7 @@ def messages_page(store, user, clients, selected) -> str:
                  f'<div><strong>{e(x.name)}</strong>{badge}<small>{last}</small></div></div>')
     if selected:
         thread = (f'<div class="cardhead"><div><h2>{e(selected.name)}</h2><div class="sub">Secure messages · {money_m(selected.aum_musd)}</div></div></div>'
-                  f'<div class="chatlog" id="chatLog">{_thread_html(store.thread, "RM")}</div>'
+                  f'<div class="chatlog" id="chatLog">{_thread_html(store.thread, "RM", _approval_state(store, selected), False)}</div>'
                   f'<div class="field"><label for="replyBody">Reply</label><textarea id="replyBody" maxlength="{services.MSG_MAX_CHARS}" placeholder="Write a reply to the client…"></textarea></div>'
                   f'<div class="actions"><button class="btn" onclick="act(\'draft_reply\')">✦ Draft a reply with AI</button><button class="btn primary" onclick="sendChat(\'replyBody\')">Send reply</button></div>'
                   f'<div class="footnote">An AI draft is only a starting point: you read, edit and send it. Nothing is sent automatically.</div>')
@@ -255,6 +308,7 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
     step1 = {"Draft": ("Pending", "warn"), "RM reviewed": ("Reviewed", "good"), "Edited": ("Edits saved", "good"), "Rejected": ("Rejected", "bad"), "Monitor": ("Pending", "warn")}[st]
     pill = {"Draft": "Draft", "RM reviewed": "RM reviewed", "Edited": "Edited", "Rejected": "Rejected", "Monitor": "Draft"}[st]
     consent_req = rec.consent_request
+    c3 = consent_cell(rec, store.proposals.get(c.id))
     prop = store.proposals.get(c.id)
     pb = prop["body"] if prop else None
     if pb:
@@ -374,7 +428,7 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
           {ai_chips}
           {ai_block or '<div style="background:#edf8f2;padding:11px;border-radius:8px;margin:12px 0;color:#23664c;font-size:11px"><b>Potential outcome (illustrative)</b><ul style="padding-left:17px;margin:6px 0 0"><li>Move closer to target allocation</li><li>Reduce unintended concentration in equity risk</li><li>Keep the long-term plan under review</li></ul><br>No monitoring run yet: press Run monitoring check for an evidence-based proposal.</div>'}
           <div class="actions"><button class="btn primary" onclick="openReview()">✎ Review & edit</button><button class="btn" onclick="openClientMessage()">▢ Draft client message</button><button class="btn" onclick="runAgent()">↻ Run monitoring check</button></div>
-          <div class="workflow"><div class="step current"><b>1 · RM review</b><span class="{step1[1]}" id="step1status">{step1[0]}</span></div><div class="step"><b>2 · Policy checks</b>{step2}</div><div class="step"><b>3 · Client consent</b><span class="warn" id="step3status">{e(consent_req if consent_req != "Not requested" else "Pending")}</span></div><div class="step"><b>4 · Execution</b><span class="muted">Locked</span></div></div>
+          <div class="workflow"><div class="step current"><b>1 · RM review</b><span class="{step1[1]}" id="step1status">{step1[0]}</span></div><div class="step"><b>2 · Policy checks</b>{step2}</div><div class="step"><b>3 · Client consent</b><span class="{c3[1]}" id="step3status">{e(c3[0])}</span></div><div class="step"><b>4 · Execution</b><span class="muted">Locked</span></div></div>
           <div class="footnote">{foot}</div>
         </div>
       </div>
@@ -385,7 +439,7 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
 
 def clientview(store: Store, user: User, c) -> str:
     rec = store.rec(c.id)
-    cs = rec.consent_request if rec.consent_request != "Not requested" else "Not requested"
+    cs = consent_cell(rec, store.proposals.get(c.id))[0]
     pref = c.contact_pref
     opts = "".join(f'<option{" selected" if o == pref else ""}>{o}</option>' for o in ("Secure client portal", "Email (approved channel)", "Discuss in next meeting"))
     if pref not in ("Secure client portal", "Email (approved channel)", "Discuss in next meeting"):
@@ -413,7 +467,7 @@ def compliance(store: Store, user: User, c) -> str:
     rec = store.rec(c.id)
     pending_actions = sum(1 for r in store.recs.values() if r.status == "Draft")
     appr = {"Draft": ("Pending", "pending"), "Monitor": ("Pending", "pending"), "RM reviewed": ("Reviewed", "pass"), "Edited": ("Edits saved", "pending"), "Rejected": ("Rejected", "bad")}[rec.status]
-    consent_state = rec.consent_request if rec.consent_request != "Not requested" else "Pending"
+    consent_state = consent_cell(rec, store.proposals.get(c.id))[0]
     rm = next((r.name for r in store.rms if r.id == c.rm_id), "—")
     prop = store.proposals.get(c.id)
     second_txt = '<span class="muted">Not required in this illustrative Tier 1 flow; policy-dependent</span>'
@@ -689,6 +743,7 @@ def modals(store: Store, user: User, c, readonly: bool) -> str:
     consent_ok = store.has_active_consent(c.id)
     rm_name = next((r.name for r in store.rms if r.id == c.rm_id), "—")
     prop = store.proposals.get(c.id)
+    _c3 = consent_cell(rec, prop)
     evid = ""
     if prop:
         pb = prop["body"]
@@ -699,7 +754,7 @@ def modals(store: Store, user: User, c, readonly: bool) -> str:
                 f'<div class="muted" style="font-size:11px;margin-top:8px"><b>Open points</b><ul style="padding-left:17px;margin:4px 0 0">{unres}</ul></div>'
                 + (f'<div class="muted" style="font-size:11px;margin-top:8px"><b>Approval history</b><ul style="padding-left:17px;margin:4px 0 0">{apprs}</ul></div>' if apprs else "") + "</div>")
     tx = "".join(f'<tr><td>{d}</td><td>{k}</td><td>{e(i)}</td><td>{money(a)}</td><td><span class="pill">{s}</span></td></tr>' for d, k, i, a, s in c.transactions)
-    return f'''<div class="modalback" id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="reviewTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">AI recommendation · {e(rec.status)}</div><h2 id="reviewTitle">Review & edit recommendation</h2></div><button class="close" onclick="closeModal('reviewModal')" aria-label="Close">×</button></div><div class="modalbody"><div class="notice">This is a fictional scenario. No order will be placed. A recommendation must pass applicable policy, suitability, consent and approval checks before any authorised action.{" Read-only: only a Relationship Manager can record a decision." if readonly else ""}</div><div class="twocol"><div class="field"><label>Client</label><input value="{e(c.name)}" readonly></div><div class="field"><label>Approval tier</label><select id="approvalTier"{" disabled" if readonly else ""}>{tier_opts}</select></div></div><div class="twocol"><div class="field"><label>Current equity allocation</label><input value="{c.weights.get("EQ", 0)}%" readonly></div><div class="field"><label>Target equity allocation</label><input id="targetEquity" type="number" min="0" max="100" value="{eq_plan}"{ro}></div></div><div class="field"><label>AI rationale (editable)</label><textarea id="rationale"{ro}>{e(rec.rationale or rat)}</textarea></div><div class="field"><label>RM review note (required to record decision)</label><textarea id="rmNote" placeholder="Add rationale for approval, edit or rejection…"{ro}>{e(rec.note)}</textarea></div>{evid}<div class="field"><label>Decision</label><select id="decision"{" disabled" if readonly else ""}><option value="approve">Approve draft for next workflow step</option><option value="edit">Save edits for further review</option><option value="reject">Reject recommendation</option></select></div>{"" if readonly else '<div class="field"><label><input type="checkbox" id="convoHeld"> I have spoken with the client (required to approve a Tier 3 item)</label></div>'}<div class="checkrow"><span class="checkmark">✓</span><span>AI output labelled as draft</span><span class="right pass">Yes</span></div><div class="checkrow"><span class="checkmark {"" if consent_ok else "pending"}">{"✓" if consent_ok else "!"}</span><span>Monitoring consent on file</span><span class="right {"pass" if consent_ok else "pending"}">{"Yes" if consent_ok else "No — required"}</span></div><div class="checkrow"><span class="checkmark pending">!</span><span>Client consent for execution</span><span class="right pending">No — still required</span></div></div><div class="modalfoot">{foot}</div></div></div>
+    return f'''<div class="modalback" id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="reviewTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">AI recommendation · {e(rec.status)}</div><h2 id="reviewTitle">Review & edit recommendation</h2></div><button class="close" onclick="closeModal('reviewModal')" aria-label="Close">×</button></div><div class="modalbody"><div class="notice">This is a fictional scenario. No order will be placed. A recommendation must pass applicable policy, suitability, consent and approval checks before any authorised action.{" Read-only: only a Relationship Manager can record a decision." if readonly else ""}</div><div class="twocol"><div class="field"><label>Client</label><input value="{e(c.name)}" readonly></div><div class="field"><label>Approval tier</label><select id="approvalTier"{" disabled" if readonly else ""}>{tier_opts}</select></div></div><div class="twocol"><div class="field"><label>Current equity allocation</label><input value="{c.weights.get("EQ", 0)}%" readonly></div><div class="field"><label>Target equity allocation</label><input id="targetEquity" type="number" min="0" max="100" value="{eq_plan}"{ro}></div></div><div class="field"><label>AI rationale (editable)</label><textarea id="rationale"{ro}>{e(rec.rationale or rat)}</textarea></div><div class="field"><label>RM review note (required to record decision)</label><textarea id="rmNote" placeholder="Add rationale for approval, edit or rejection…"{ro}>{e(rec.note)}</textarea></div>{evid}<div class="field"><label>Decision</label><select id="decision"{" disabled" if readonly else ""}><option value="approve">Approve draft for next workflow step</option><option value="edit">Save edits for further review</option><option value="reject">Reject recommendation</option></select></div>{"" if readonly else '<div class="field"><label><input type="checkbox" id="convoHeld"> I have spoken with the client (required to approve a Tier 3 item)</label></div>'}<div class="checkrow"><span class="checkmark">✓</span><span>AI output labelled as draft</span><span class="right pass">Yes</span></div><div class="checkrow"><span class="checkmark {"" if consent_ok else "pending"}">{"✓" if consent_ok else "!"}</span><span>Monitoring consent on file</span><span class="right {"pass" if consent_ok else "pending"}">{"Yes" if consent_ok else "No — required"}</span></div><div class="checkrow"><span class="checkmark pending">!</span><span>Client consent for execution</span><span class="right {"pass" if _c3[1] == "good" else ("pending" if _c3[1] == "warn" else "")}">{_c3[0]}</span></div></div><div class="modalfoot">{foot}</div></div></div>
 {_ask_modal()}
 {_report_modal()}
 <div class="modalback" id="messageModal" role="dialog" aria-modal="true" aria-labelledby="messageTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Client View · RM-gated</div><h2 id="messageTitle">Draft client message</h2></div><button class="close" onclick="closeModal('messageModal')">×</button></div><div class="modalbody"><div class="notice">This creates a draft only. It will not be sent from this prototype.</div><div class="field"><label>Subject</label><input id="messageSubject" value="{e(draft["subject"])}"></div><div class="field"><label>Message</label><textarea id="messageBody">{e(draft["body"])}</textarea></div></div><div class="modalfoot"><button class="btn" onclick="closeModal('messageModal')">Close draft</button><button class="btn primary" onclick="markDraftReady()">Mark ready for RM review</button></div></div></div>
@@ -716,10 +771,16 @@ def _report_modal() -> str:
             '<button class="btn" id="reportCsv" onclick="downloadCurrentReport(\'csv\')">Download CSV</button><button class="btn primary" onclick="downloadCurrentReport(\'html\')">Download report</button></div></div></div>')
 
 
-def _ask_modal() -> str:
+def _ask_modal(client: bool = False) -> str:
     from ..agents.llm import llm_status
     st = llm_status()
     foot = (f"AI-assisted ({st['provider']}) · answers cite the records they use" if st["live"] else "Rule-based · no external AI service is connected")
     intro = ("Answers are drafted by the connected AI from this client's authorised records only, with the records cited." if st["live"]
              else "Answers are rule-based from stored records until an AI service is connected.")
+    if client:
+        return ("<div class=\"modalback\" id=\"askModal\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"askTitle\"><div class=\"modal\"><div class=\"modalhead\"><div><div class=\"eyebrow\">Your assistant</div><h2 id=\"askTitle\">Ask Atlas AI</h2></div>"
+                "<button class=\"close\" onclick=\"closeModal('askModal')\">×</button></div><div class=\"modalbody\"><p class=\"muted\">Ask about your own portfolio, your allocation or your goals. Answers come only from your own records and are not financial advice. " + intro + "</p>"
+                "<div class=\"field\"><label>Your question</label><textarea id=\"askQuestion\" placeholder=\"e.g., How is my money split compared with my plan?\"></textarea></div><div id=\"askAnswer\" class=\"calloutnote hidden\"></div>"
+                "<div class=\"actions\"><button class=\"btn\" onclick=\"askPrompt('Explain my allocation')\">Explain my allocation</button><button class=\"btn\" onclick=\"askPrompt('Summarise my goals')\">Summarise my goals</button></div></div>"
+                "<div class=\"modalfoot\"><span class=\"footnote\">" + foot + "</span><button class=\"btn primary\" onclick=\"answerAsk()\">Get answer</button></div></div></div>")
     return '''<div class="modalback" id="askModal" role="dialog" aria-modal="true" aria-labelledby="askTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Internal assistant</div><h2 id="askTitle">Ask Atlas AI</h2></div><button class="close" onclick="closeModal('askModal')">×</button></div><div class="modalbody"><p class="muted">Ask about the selected client, portfolio signal, goal or recommendation. ''' + intro + ''' This is not financial advice.</p><div class="field"><label>Your question</label><textarea id="askQuestion" placeholder="e.g., Why is this portfolio flagged for review?"></textarea></div><div id="askAnswer" class="calloutnote hidden"></div><div class="actions"><button class="btn" onclick="askPrompt('Explain the allocation drift')">Explain allocation drift</button><button class="btn" onclick="askPrompt('Summarise client goals')">Summarise goals</button><button class="btn" onclick="askPrompt('What checks are pending?')">Pending checks</button></div></div><div class="modalfoot"><span class="footnote">''' + foot + '''</span><button class="btn primary" onclick="answerAsk()">Get answer</button></div></div></div>'''

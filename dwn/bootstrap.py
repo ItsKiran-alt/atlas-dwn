@@ -31,6 +31,8 @@ def init(url: str | None = None) -> None:
             with session_scope(url) as s:
                 seed_demo(Repo(s))
             with session_scope(url) as s:
+                refresh_demo_upkeep(Repo(s))
+            with session_scope(url) as s:
                 ensure_profiles(Repo(s))
         _done.add(key)
 
@@ -46,6 +48,7 @@ def seed_demo(repo: Repo) -> None:
         repo.create_user(User(rm.email, rm.name, "RM", rm_id=rm.id, initials=rm.initials), pw_hash)
     repo.create_user(User(seed.ADMIN_EMAIL, "Atlas Administrator", "Admin", initials="AD"), pw_hash)
     for c in seed.ALL_CLIENTS:
+        c.next_meeting = seed.meeting_date(c.id)
         repo.add_client(c)
         repo.create_user(User(c.email, c.name, "Client", client_id=c.id, initials="CL"), pw_hash)
         if c.has_consent:
@@ -68,3 +71,28 @@ def seed_demo(repo: Repo) -> None:
     ]
     for ts, action, actor, details, status, kind in seeded:
         repo.log("Rajesh Menon", action, actor, details, status, kind, client_id="c-rajesh.menon", ts=ts)
+
+
+def refresh_demo_upkeep(repo: Repo) -> None:
+    """Idempotent upkeep for demo data that may already exist in a hosted database:
+    - every client's 'next meeting' must be in the future (older seeds said 2025);
+    - Rajesh Menon and Sneha Patel (clients of Priya Sharma) always have a client login with the same demo password as everyone else."""
+    from datetime import date
+    today = date.today()
+    for c in repo.list_clients(include_all=True):
+        try:
+            when = datetime.strptime(c.next_meeting, "%d %b %Y").date()
+        except (ValueError, TypeError):
+            when = None
+        if when is None or when < today:
+            repo.set_next_meeting(c.id, seed.meeting_date(c.id, today))
+    pw_hash = None
+    for name in ("Rajesh Menon", "Sneha Patel"):
+        email = seed.slug(name) + "@atlas-demo.com"
+        if repo.user_exists(email):
+            continue
+        client = next(iter(repo.list_clients(client_id="c-" + seed.slug(name))), None)
+        if client is None:
+            continue
+        pw_hash = pw_hash or hash_password(config.demo_password())
+        repo.create_user(User(email, client.name, "Client", client_id=client.id, initials="CL"), pw_hash)

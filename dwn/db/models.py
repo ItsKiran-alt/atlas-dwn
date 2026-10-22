@@ -126,6 +126,7 @@ class RecRow(Base):
     note: Mapped[str] = mapped_column(Text, default="")
     consent_request: Mapped[str] = mapped_column(String(40), default="Not requested")
     client_message: Mapped[str] = mapped_column(String(40), default="Not shared")
+    client_approval: Mapped[str] = mapped_column(String(20), default="not_required", server_default="not_required")   # not_required | pending | approved | meeting_requested
 
 
 class NoteRow(Base):
@@ -394,6 +395,19 @@ class MessageRow(Base):
     rm_id: Mapped[str] = mapped_column(String(40))
     sender_role: Mapped[str] = mapped_column(String(10))                 # Client | RM
     sender_name: Mapped[str] = mapped_column(String(120))
+    kind: Mapped[str] = mapped_column(String(20), default="text", server_default="text")   # text | consent_request | client_response
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class NotificationRow(Base):
+    """In-app notification for a client (e.g. the RM recorded a decision). Short, plain text; no portfolio figures."""
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))                     # decision | consent_request
+    title: Mapped[str] = mapped_column(String(160))
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

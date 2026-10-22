@@ -63,13 +63,14 @@ function pollBg() {
   if (ARGS.bg_running) { pollTimer = setTimeout(() => act('refresh_view'), 2500); return; }
   const chatOpen = ARGS.role === 'Client' || ui.view === 'messages';
   if (ARGS.poll_chat && chatOpen && !document.hidden) {
-    if (ARGS.chat_unread && !seenPending) { seenPending = true; setTimeout(() => { seenPending = false; act('chat_seen'); }, 3500); }
+    if (ARGS.chat_unread && ARGS.role !== 'Client' && !seenPending) { seenPending = true; setTimeout(() => { seenPending = false; act('chat_seen'); }, 3500); }
     pollTimer = setTimeout(() => act('refresh_view'), 12000);
   }
 }
 let seenPending = false;
 function render() {
   busy(false);
+  announceNew();
   const root = document.getElementById('root');
   const key = ARGS.render_key;
   if (key !== lastRenderKey) {
@@ -118,6 +119,7 @@ function applyView() {
   // queue filter
   document.querySelectorAll('#queueFilters .chip').forEach(c => { const m = (c.getAttribute('onclick') || '').match(/filterQueue\('(\w+)'/); if (m) c.classList.toggle('selected', m[1] === ui.queueKind); });
   if (document.getElementById('queue')) searchQueue();
+  const np = document.getElementById('notifPanel'); if (np) np.classList.toggle('open', !!ui.notifOpen);
   const p = document.getElementById('performanceValue');
   if (p && p.dataset.perf) { try { p.textContent = JSON.parse(p.dataset.perf)[ui.period]; } catch (e) {} }
   document.querySelectorAll('.charttitle .actions .chip').forEach(c => c.classList.toggle('selected', c.textContent.trim() === ui.period));
@@ -177,6 +179,12 @@ function openNotes() { openModal('notesModal'); }
 function openCrm() { openModal('crmModal'); }
 function openHistory() { openModal('historyModal'); }
 function runAgent() { act('run_agent'); }
+function openMessages() { const c = document.getElementById('chatCard'); if (c) c.scrollIntoView({behavior: 'smooth', block: 'start'}); act('chat_seen'); }
+function toggleNotifications(unread) { ui.notifOpen = !ui.notifOpen; applyView(); if (ui.notifOpen && unread) act('notifications_seen'); }
+document.addEventListener('click', e => { if (ui.notifOpen && !e.target.closest('.notifwrap')) { ui.notifOpen = false; applyView(); } });
+let prevNotif = null, prevMsg = null;
+function announceNew() { if (!ARGS || ARGS.role !== 'Client') return; if (typeof ARGS.notif_unread === 'number') { if (prevNotif !== null && ARGS.notif_unread > prevNotif) toast('New notification from your Relationship Manager.'); prevNotif = ARGS.notif_unread; }
+  if (typeof ARGS.chat_unread === 'number') { if (prevMsg !== null && ARGS.chat_unread > prevMsg) toast('You have a new message from your Relationship Manager.'); prevMsg = ARGS.chat_unread; } }
 function sendChat(id) { const el = document.getElementById(id); if (!el) return; act('send_message', {body: el.value}); }
 function setPortalPeriod(p, btn) { document.querySelectorAll('.perfblock').forEach(b => b.style.display = b.dataset.p === p ? 'block' : 'none'); document.querySelectorAll('#view-clientportal .actions .chip').forEach(c => c.classList.toggle('selected', c === btn)); }
 function runClientNow() { toast('Running the monitoring agents for this client…'); act('run_agent'); }

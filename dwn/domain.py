@@ -97,3 +97,4 @@ class Rec:
     note: str = ""
     consent_request: str = "Not requested"
     client_message: str = "Not shared"
+    client_approval: str = "not_required"      # not_required | pending | approved | meeting_requested (Tier 3 only)

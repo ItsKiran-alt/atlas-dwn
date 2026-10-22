@@ -168,7 +168,100 @@ def save_rm_decision(repo: Repo, user: User, client_id: str, note: str, decision
         r.rationale = rationale.strip()
     repo.save_rec(r, decided_at=utcnow())
     repo.log(c.name, f"RM decision: {decision}", user.name, note, "Rejected" if decision == "reject" else "Logged", "RM", client_id=c.id)
+    notify_client_of_decision(repo, c, repo.get_rec(c.id), user.name, need, decision, r.title or c.issue)
     return repo.get_rec(c.id)
+
+
+# ---------------- client notifications and the Tier 3 client approval ----------------
+def _tier_number(tier: str) -> str:
+    """'3' or 'Tier 3 — Investment committee' -> '3'."""
+    digits = [ch for ch in str(tier) if ch.isdigit()]
+    return digits[0] if digits else "1"
+
+
+def notify_client_of_decision(repo: Repo, c: Client, rec: Rec, rm_name: str, tier: str, decision: str, title: str, final: bool = False):
+    """Tell the client what the RM decided.
+    Tier 1 and 2: a notification only; the client has nothing to do.
+    Tier 3, first approval: a chat message that asks for the client's approval (or a meeting); the client's answer is required."""
+    first = c.name.split(" ")[0]
+    t = _tier_number(tier)
+    if t == "3" and decision == "approve" and not final:
+        rec.client_approval = "pending"
+        repo.save_rec(rec)
+        repo.add_message(c.id, c.rm_id, "RM", rm_name,
+                         f"Hello {first}, I have reviewed the recommendation for your portfolio ({title}). Because this is a significant change, I need your consent before it can go ahead. "
+                         "You can approve it below, or ask for a meeting so we can talk it through first.\n\n" + rm_name, kind="consent_request")
+        repo.add_notification(c.id, "consent_request", "Your approval is needed",
+                              f"{rm_name} has reviewed a significant recommendation and is waiting for your consent. Open your messages to approve it or ask for a meeting.")
+        repo.log(c.name, "Client approval requested", rm_name, "Tier 3: asked the client to approve or request a meeting", "Awaiting client", "Consent", client_id=c.id)
+        return
+    if decision == "approve":
+        if rec.client_approval != "approved":
+            rec.client_approval = "not_required"
+            repo.save_rec(rec)
+        text = ("Your adviser team has completed the final approval of the recommendation. Nothing more is needed from you." if final
+                else f"{rm_name} has reviewed and approved the recommended adjustment to your portfolio. No action is needed from you.")
+        head = "Recommendation approved"
+    elif decision == "edit":
+        head, text = "Recommendation being refined", f"{rm_name} has reviewed the recommendation and is refining it. No action is needed from you."
+    else:
+        head, text = "Recommendation not going ahead", f"{rm_name} has reviewed the recommendation and decided not to proceed with it. No action is needed from you."
+    repo.add_notification(c.id, "decision", head, text)
+
+
+def respond_to_approval_request(repo: Repo, user: User, decision: str):
+    """The client answers the Tier 3 request: approve, or ask for a meeting first. The answer reaches the RM as a chat message."""
+    if user.role != "Client":
+        raise Denied("Only the client can answer this request.")
+    c = get_client(repo, user, user.client_id)
+    rec = repo.get_rec(c.id, c.issue)
+    if rec.client_approval not in ("pending", "meeting_requested"):
+        raise ValueError("There is nothing waiting for your approval right now.")
+    prop = repo.latest_proposal(c.id)
+    if prop and prop["status"] != "awaiting_second":
+        raise ValueError("This request is no longer open.")
+    if decision == "approve":
+        rec.client_approval, text, label = "approved", "I approve this recommendation.", "approved"
+    elif decision == "meeting":
+        if rec.client_approval == "meeting_requested":
+            raise ValueError("You have already asked for a meeting. Your adviser will be in touch.")
+        rec.client_approval, text, label = "meeting_requested", "I would like to meet to discuss this recommendation before I decide.", "asked for a meeting"
+    else:
+        raise ValueError("Unknown answer.")
+    repo.save_rec(rec)
+    repo.add_message(c.id, c.rm_id, "Client", user.name, text, kind="client_response")
+    repo.log(c.name, "Client answered approval request", user.name, f"Client {label}", "Logged", "Consent", client_id=c.id)
+
+
+def mark_notifications_read(repo: Repo, user: User):
+    if user.role == "Client":
+        repo.mark_notifications_read(user.client_id)
+
+
+def answer_client_question(repo: Repo, user: User, question: str) -> str:
+    """'Ask Atlas AI' for a client: answers only from THEIR OWN allocation, goals and consent. No RM notes, proposals or other clients."""
+    if user.role != "Client":
+        raise Denied("Only a client can use this assistant.")
+    q0 = (question or "").strip()
+    if not q0:
+        raise ValueError("Type a question or choose a suggestion.")
+    if len(q0) > 1000:
+        raise ValueError("Questions are limited to 1,000 characters.")
+    c = get_client(repo, user, user.client_id)
+    if not repo.has_active_consent(c.id):
+        return "Your consent for AI-assisted monitoring is withdrawn, so the assistant is paused. You can give consent again from your portal."
+    from .agents.llm import make_llm
+    from .agents.skills import Copilot, run_skill
+    k, d = headline_drift(c.weights, c.plan)
+    recs = {"allocation": (f"Your {CLASS_LABEL[k].lower()} weight is {c.weights[k]}% against a {c.plan[k]}% plan ({d:+g} points)." if abs(d) >= 0.5
+                           else "None of your asset classes differs from your plan by 0.5 points or more.")}
+    for i, g in enumerate(c.goals):
+        recs[f"goal{i + 1}"] = f"Goal {g.name}: {g.detail}; about {g.progress}% on track (illustrative)."
+    recs["consent"] = "Your monitoring consent is on file."
+    r = run_skill(Copilot(), make_llm(), {"question": q0, "records": recs})
+    if r.output.abstain:
+        return "I can't answer that from your own records. Please message your Relationship Manager."
+    return r.output.answer + "  [From your own records: " + ", ".join(r.output.citations) + (" · template" if r.used_fallback else f" · {r.provider}") + "]"
 
 
 def request_consent(repo: Repo, user: User, client_id: str):
@@ -610,6 +703,8 @@ def decide_proposal(repo: Repo, user: User, client_id: str, decision: str, note:
             raise Denied("This case is routed to a different second approver.")
         if decision == "edit":
             raise ValueError("The second approver can approve or reject; edits go back to the first approver by rejecting.")
+        if decision == "approve" and rec.client_approval in ("pending", "meeting_requested"):
+            raise Denied("The client has not approved this Tier 3 recommendation yet. It can be finally approved only after the client approves.")
         repo.add_approval(pid, "second", user.name, user.rm_id, decision, note)
         new = "approved" if decision == "approve" else "rejected"
         repo.update_proposal(pid, status=new, second_approver=user.name)
@@ -617,6 +712,7 @@ def decide_proposal(repo: Repo, user: User, client_id: str, decision: str, note:
         rec.decided_by, rec.note = user.name, note
         repo.save_rec(rec, decided_at=utcnow())
         repo.log(c.name, f"Second approval: {decision}", user.name, note, "Rejected" if decision == "reject" else "Logged", "RM", client_id=client_id)
+        notify_client_of_decision(repo, c, rec, user.name, tier, decision, prop["body"]["title"], final=True)
         return
     if user.rm_id != c.rm_id:
         raise Denied("Only the client's relationship manager records the first decision.")
@@ -648,3 +744,4 @@ def decide_proposal(repo: Repo, user: User, client_id: str, decision: str, note:
              "Rejected" if decision == "reject" else ("Pending" if new == "awaiting_second" else "Logged"), "RM", client_id=client_id)
     if new == "awaiting_second":
         repo.log(c.name, "Second approval required", "Workflow", "Tier 3: a different senior approver must decide after the client conversation", "Pending", "RM", client_id=client_id)
+    notify_client_of_decision(repo, c, rec, user.name, tier, decision, prop["body"]["title"])

@@ -215,7 +215,7 @@ class Repo:
 
     # ---------------- recommendations ----------------
     def _rec(self, r: M.RecRow) -> Rec:
-        return Rec(r.client_id, r.title, r.status, r.rationale, r.tier, r.decided_by, fmt_ts(r.decided_at), r.note, r.consent_request, r.client_message)
+        return Rec(r.client_id, r.title, r.status, r.rationale, r.tier, r.decided_by, fmt_ts(r.decided_at), r.note, r.consent_request, r.client_message, r.client_approval or "not_required")
 
     def get_rec(self, client_id: str, default_title: str = "") -> Rec:
         r = self.s.get(M.RecRow, client_id)
@@ -234,6 +234,7 @@ class Repo:
         r = self.s.get(M.RecRow, rec.client_id) or M.RecRow(client_id=rec.client_id, title=rec.title)
         r.title, r.status, r.rationale, r.tier, r.decided_by = rec.title, rec.status, rec.rationale, rec.tier, rec.decided_by
         r.note, r.consent_request, r.client_message = rec.note, rec.consent_request, rec.client_message
+        r.client_approval = rec.client_approval
         if decided_at:
             r.decided_at = decided_at
         self.s.add(r)
@@ -604,13 +605,13 @@ class Repo:
         return self.s.scalar(select(func.max(M.PriceHistoryRow.retrieved_at)).where(M.PriceHistoryRow.symbol == symbol))
 
     # ---------------- client <-> RM messages ----------------
-    def add_message(self, client_id: str, rm_id: str, sender_role: str, sender_name: str, body: str):
-        self.s.add(M.MessageRow(client_id=client_id, rm_id=rm_id, sender_role=sender_role, sender_name=sender_name, body=body, created_at=utcnow()))
+    def add_message(self, client_id: str, rm_id: str, sender_role: str, sender_name: str, body: str, kind: str = "text"):
+        self.s.add(M.MessageRow(client_id=client_id, rm_id=rm_id, sender_role=sender_role, sender_name=sender_name, body=body, kind=kind, created_at=utcnow()))
         self.s.flush()
 
     def messages_for(self, client_id: str, limit: int = 80) -> list[dict]:
         rows = list(self.s.scalars(select(M.MessageRow).where(M.MessageRow.client_id == client_id).order_by(M.MessageRow.id.desc()).limit(limit)))
-        return [dict(id=m.id, role=m.sender_role, name=m.sender_name, body=m.body, at=m.created_at, read=m.read_at is not None) for m in reversed(rows)]
+        return [dict(id=m.id, role=m.sender_role, name=m.sender_name, body=m.body, at=m.created_at, read=m.read_at is not None, kind=m.kind or "text") for m in reversed(rows)]
 
     def recent_message_stats(self, client_ids: list[str]) -> dict[str, dict]:
         """Per client: unread messages FROM the client, and the latest message time. One query."""
@@ -634,3 +635,25 @@ class Repo:
 
     def count_messages_since(self, client_id: str, sender_role: str, since: datetime) -> int:
         return self.s.scalar(select(func.count()).select_from(M.MessageRow).where(M.MessageRow.client_id == client_id, M.MessageRow.sender_role == sender_role, M.MessageRow.created_at >= since)) or 0
+
+    # ---------------- client notifications ----------------
+    def add_notification(self, client_id: str, kind: str, title: str, body: str):
+        self.s.add(M.NotificationRow(client_id=client_id, kind=kind, title=title[:160], body=body, created_at=utcnow()))
+        self.s.flush()
+
+    def notifications_for(self, client_id: str, limit: int = 30) -> list[dict]:
+        q = select(M.NotificationRow).where(M.NotificationRow.client_id == client_id).order_by(M.NotificationRow.id.desc()).limit(limit)
+        return [dict(id=n.id, kind=n.kind, title=n.title, body=n.body, at=n.created_at, read=n.read_at is not None) for n in self.s.scalars(q)]
+
+    def mark_notifications_read(self, client_id: str):
+        now = utcnow()
+        for n in self.s.scalars(select(M.NotificationRow).where(M.NotificationRow.client_id == client_id, M.NotificationRow.read_at.is_(None))):
+            n.read_at = now
+        self.s.flush()
+
+    # ---------------- demo upkeep ----------------
+    def set_next_meeting(self, client_id: str, text: str):
+        r = self.s.get(M.ClientRow, client_id)
+        if r is not None:
+            r.next_meeting = text
+            self.s.flush()

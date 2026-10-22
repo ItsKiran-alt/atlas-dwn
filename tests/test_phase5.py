@@ -316,6 +316,9 @@ def test_tier3_needs_conversation_then_a_different_senior_second_approver(repo):
     admin = login(repo, "admin@atlas-demo.com", "Admin")
     with pytest.raises(services.Denied):
         services.decide_proposal(repo, admin, "c-rajesh.menon", "approve", "x")
+    with pytest.raises(services.Denied, match="client has not approved"):                                              # Tier 3 also needs the client's own approval
+        services.decide_proposal(repo, arjun, "c-rajesh.menon", "approve", "Reviewed evidence and checks.")
+    services.respond_to_approval_request(repo, login(repo, "rajesh.menon@atlas-demo.com", "Client"), "approve")
     services.decide_proposal(repo, arjun, "c-rajesh.menon", "approve", "Reviewed evidence and checks.")
     p = repo.latest_proposal("c-rajesh.menon")
     assert p["status"] == "approved" and p["first_approver"] == "Priya Sharma" and p["second_approver"] == "Arjun Mehta"
@@ -394,6 +397,10 @@ def test_ui_run_check_shows_tier_evidence_and_second_approver(repo, monkeypatch)
     sa = sess_for(repo, "arjun.mehta@atlas-demo.com", "RM")
     assert "Rajesh Menon" in controller.build(repo, sa)["html"]                                        # case visible to the assigned second approver
     event(repo, sa, "select_client", id="c-rajesh.menon")
+    assert "Awaiting client" in controller.build(repo, s)["html"]                                       # step 3 shows the client's approval is outstanding
+    sc = sess_for(repo, "rajesh.menon@atlas-demo.com", "Client")
+    assert "I need your consent" in controller.build(repo, sc)["html"] and "Request a meeting" in controller.build(repo, sc)["html"]
+    event(repo, sc, "client_approval", decision="approve")
     event(repo, sa, "save_review", note="Reviewed.", decision="approve", tier="Tier 1 — RM approval", target="60", rationale="")
     assert repo.latest_proposal("c-rajesh.menon")["status"] == "approved"
 
