@@ -411,3 +411,27 @@ class NotificationRow(Base):
     body: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class NewsInterpretationRow(Base):
+    """What the market event interpreter made of one headline. Interpretation is labelled as such; it is never a forecast."""
+    __tablename__ = "news_interpretations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guid_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(40))
+    classes_json: Mapped[str] = mapped_column(Text)
+    relevance: Mapped[str] = mapped_column(String(10))
+    fact: Mapped[str] = mapped_column(Text)
+    interpretation: Mapped[str] = mapped_column(Text)
+    provider: Mapped[str] = mapped_column(String(20))            # groq | gemini | template
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ClientEventImpactRow(Base):
+    """Cached AI-drafted outlook of the relevant market events for one client. A scenario-style note for the RM, never a forecast."""
+    __tablename__ = "client_event_impacts"
+    client_id: Mapped[str] = mapped_column(ForeignKey("clients.id"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(40))
+    text: Mapped[str] = mapped_column(Text)
+    provider: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime)

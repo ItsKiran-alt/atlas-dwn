@@ -657,3 +657,29 @@ class Repo:
         if r is not None:
             r.next_meeting = text
             self.s.flush()
+
+    # ---------------- market event interpretations ----------------
+    def interpretations_for(self, guid_hashes: list[str]) -> dict[str, dict]:
+        if not guid_hashes:
+            return {}
+        q = select(M.NewsInterpretationRow).where(M.NewsInterpretationRow.guid_hash.in_(guid_hashes))
+        return {r.guid_hash: dict(event_type=r.event_type, classes=json.loads(r.classes_json), relevance=r.relevance, fact=r.fact,
+                                  interpretation=r.interpretation, provider=r.provider) for r in self.s.scalars(q)}
+
+    def save_interpretation(self, guid_hash: str, event_type: str, classes: list[str], relevance: str, fact: str, interpretation: str, provider: str):
+        r = self.s.scalar(select(M.NewsInterpretationRow).where(M.NewsInterpretationRow.guid_hash == guid_hash)) or M.NewsInterpretationRow(guid_hash=guid_hash)
+        r.event_type, r.classes_json, r.relevance = event_type, json.dumps(classes), relevance
+        r.fact, r.interpretation, r.provider, r.created_at = fact[:600], interpretation[:600], provider, utcnow()
+        self.s.add(r)
+        self.s.flush()
+
+    # ---------------- client event outlook (cache) ----------------
+    def get_event_impact(self, client_id: str) -> dict | None:
+        r = self.s.get(M.ClientEventImpactRow, client_id)
+        return dict(key=r.key, text=r.text, provider=r.provider) if r else None
+
+    def save_event_impact(self, client_id: str, key: str, text: str, provider: str):
+        r = self.s.get(M.ClientEventImpactRow, client_id) or M.ClientEventImpactRow(client_id=client_id)
+        r.key, r.text, r.provider, r.created_at = key, text[:1500], provider, utcnow()
+        self.s.add(r)
+        self.s.flush()

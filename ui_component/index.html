@@ -68,6 +68,7 @@ function pollBg() {
   }
 }
 let seenPending = false;
+let lastOutlookAsk = '';
 function render() {
   busy(false);
   announceNew();
@@ -103,6 +104,7 @@ function render() {
   ui.modals.forEach(id => { const m = document.getElementById(id); if (m) m.classList.add('open'); });
   post('streamlit:setFrameHeight', {height: window.innerHeight || 900});
   pollBg();
+  if (ARGS.role === 'RM' && ARGS.outlook_needed && ARGS.outlook_needed !== lastOutlookAsk && !ARGS.bg_running) { lastOutlookAsk = ARGS.outlook_needed; act('event_outlook'); }
 }
 function applyView() {
   if (!ARGS) return;
@@ -179,6 +181,7 @@ function openNotes() { openModal('notesModal'); }
 function openCrm() { openModal('crmModal'); }
 function openHistory() { openModal('historyModal'); }
 function runAgent() { act('run_agent'); }
+function toggleMore(btn) { const box = btn.previousElementSibling; if (!box) return; const open = box.classList.toggle('hidden') === false; btn.textContent = open ? 'Show less' : btn.dataset.label; }
 function openMessages() { const c = document.getElementById('chatCard'); if (c) c.scrollIntoView({behavior: 'smooth', block: 'start'}); act('chat_seen'); }
 function toggleNotifications(unread) { ui.notifOpen = !ui.notifOpen; applyView(); if (ui.notifOpen && unread) act('notifications_seen'); }
 document.addEventListener('click', e => { if (ui.notifOpen && !e.target.closest('.notifwrap')) { ui.notifOpen = false; applyView(); } });

@@ -50,6 +50,16 @@ class ViewData:
         self.market = MarketService(repo).view() if user.role in ("RM", "Admin") else []
         self.market_by_symbol = {r["symbol"]: r for r in self.market}
         self.news = NewsService(repo).latest(10) if user.role in ("RM", "Admin") else []
+        self.interp = repo.interpretations_for([n.guid_hash for n in self.news])
+        self.events, self.outlook, self.outlook_key = [], None, ""
+        if selected and user.role == "RM" and self._consent.get(selected.id):
+            from ..events import relevant_events, impact_key
+            self.events = relevant_events(selected, self.news, self.interp)
+            self.outlook = repo.get_event_impact(selected.id) if self.events else None
+            key = impact_key(selected, self.events) if self.events else ""
+            from ..agents.llm import llm_status
+            stale = (not self.outlook) or self.outlook["key"] != key or (self.outlook["provider"] == "template" and llm_status()["live"])
+            self.outlook_key = (selected.id + ":" + key) if (self.events and stale) else ""
 
     @property
     def history(self) -> dict:
@@ -287,6 +297,11 @@ def handle(repo: Repo, sess: dict, ev: dict) -> None:
             repo.s.commit()
             text, how = services.draft_reply(repo, user, c.id)
             _effect(sess, fill=dict(id="replyBody", text=text), toast=f"Draft prepared by {how}. Read and edit it before sending; nothing was sent.")
+        elif act == "event_outlook":
+            c, _ = _active_client(repo, user, sess)
+            repo.s.commit()
+            services.generate_event_outlook(repo, user, c.id)
+            _effect(sess)
         elif act == "client_approval":
             services.respond_to_approval_request(repo, user, p.get("decision", ""))
             _effect(sess, toast="Thank you. Your answer has been sent to your Relationship Manager.")
@@ -347,6 +362,10 @@ def handle(repo: Repo, sess: dict, ev: dict) -> None:
         elif act in ("market_refresh", "market_refresh_if_stale"):
             services.require_role(user, "RM", "Admin")
             if act == "market_refresh_if_stale" and not services.external_data_is_stale(repo):
+                try:                                                 # catch-up: interpret any headlines that have no interpretation yet
+                    services.interpret_new_headlines(repo)
+                except Exception:
+                    repo.s.rollback()
                 _effect(sess)
             else:
                 repo.s.commit()                                   # release the write lock before network calls
@@ -420,7 +439,7 @@ def _build(repo: Repo, sess: dict) -> dict:
         default = "workbench"
     html = ('<div class="app" id="appShell">' + R._topbar(user, vd, n_draft) + '<div class="layout">' + R._nav(vd, user, n_tasks) +
             '<main class="main">' + main + '</main></div></div>' + R.modals(vd, user, c, readonly=(user.role == "Admin")))
-    payload = dict(html=html, role=user.role, allowed=allowed, default_view=default, settings_denied=(user.role == "RM" and not can_sched),
+    payload = dict(html=html, role=user.role, allowed=allowed, default_view=default, settings_denied=(user.role == "RM" and not can_sched), outlook_needed=vd.outlook_key,
                    bg_running=bool((sess.get("bg") or {}).get("running")), poll_chat=True,
                    chat_unread=sum(1 for m in vd.thread if m["role"] == "Client" and not m["read"]))
     payload.update(_finish(html, effect, sess))

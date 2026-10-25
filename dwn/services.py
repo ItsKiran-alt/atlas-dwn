@@ -634,11 +634,78 @@ def refresh_external_data(repo: Repo, user: User, force: bool = False) -> str:
         parts.append("feed failures: " + ", ".join(n["failed"]))
     if n["quarantined"]:
         parts.append(f"{n['quarantined']} item(s) quarantined")
+    try:                                                         # interpret new headlines automatically; a failure here never breaks the refresh
+        repo.s.commit()
+        interpret_new_headlines(repo)
+    except Exception:
+        repo.s.rollback()
     problems = bool(m["failed"] or n["failed"] or h["failed"])
     repo.log("—", "External data refresh", user.name, " · ".join(parts), "Review" if problems else "Logged", "System")
     if problems:
         return "Refresh finished with problems: " + " · ".join(parts[2:]) + ". Last successful data is shown with its age."
     return "Market data and headlines refreshed from the live sources."
+
+
+def interpret_new_headlines(repo: Repo, limit: int = 12) -> int:
+    """Market event interpreter for the Research & Market page. Interprets headlines that have no interpretation yet
+    (or only a keyword-rule one while an AI provider is connected) in ONE model call, and stores the result.
+    Facts are restated from the headline only; interpretation is labelled and never a forecast. Returns how many were stored."""
+    from .agents.llm import llm_status, make_llm
+    from .agents.skills import EventInterpreter, run_skill
+    items = [n for n in repo.list_news(limit=40) if not n.quarantined]
+    have = repo.interpretations_for([n.guid_hash for n in items])
+    live = llm_status()["live"]
+    todo = [n for n in items if n.guid_hash not in have or (live and have[n.guid_hash]["provider"] == "template")][:limit]
+    if not todo:
+        return 0
+    repo.s.commit()                                              # no database lock while the model is called
+    r = run_skill(EventInterpreter(), make_llm(), {"headlines": [dict(publisher=n.publisher, title=n.title) for n in todo]})
+    by_index = {it.index: it for it in r.output.items}
+    provider = "template" if r.used_fallback else r.provider
+    for k, n in enumerate(todo):
+        it = by_index.get(k)
+        if it is None:
+            repo.save_interpretation(n.guid_hash, "other", [], "low", n.title, "", provider)
+        else:
+            repo.save_interpretation(n.guid_hash, it.event_type, list(it.affected_classes), it.relevance, it.confirmed_fact, it.interpretation, provider)
+    return len(todo)
+
+
+def client_events(repo: Repo, client: Client) -> list[dict]:
+    from .data.news import NewsService
+    from .events import relevant_events
+    news = NewsService(repo).latest(10)
+    return relevant_events(client, news, repo.interpretations_for([n.guid_hash for n in news]))
+
+
+def generate_event_outlook(repo: Repo, user: User, client_id: str) -> bool:
+    """AI-drafted, scenario-style note on how the relevant market events could matter for this client. Cached; redrafted only when the events or
+    the client's mix change (or when an AI provider has become available since a template version was stored). Consent-gated. Display only:
+    it never changes the tier or the proposal. Returns True if a new note was stored."""
+    require_role(user, "RM")
+    c = get_client(repo, user, client_id)
+    require_monitoring_consent(repo, c)
+    from .agents.llm import llm_status, make_llm
+    from .agents.skills import ClientEventOutlook, run_skill
+    from .events import impact_key
+    events = client_events(repo, c)
+    if not events:
+        return False
+    key = impact_key(c, events)
+    have = repo.get_event_impact(c.id)
+    if have and have["key"] == key and not (have["provider"] == "template" and llm_status()["live"]):
+        return False
+    repo.s.commit()                                              # no database lock while the model is called
+    records = {"risk_profile": f"Risk profile: {c.risk_profile}."}
+    for i, ev in enumerate(events[:3], 1):
+        records[f"event{i}"] = (f"{ev['fact']} ({ev['label']}; affects {', '.join(ev['class_names']).lower()}; {ev['exposure']:g}% of this client's portfolio is in those asset classes). "
+                                f"Interpretation: {ev['interpretation'] or 'none'}")
+    for i, g in enumerate(c.goals, 1):
+        records[f"goal{i}"] = f"Goal {g.name}: {g.detail}; about {g.progress}% on track (illustrative)."
+    r = run_skill(ClientEventOutlook(), make_llm(), dict(first_name=c.name.split(" ")[0], events=events[:3], records=records, goals=[g.name for g in c.goals]))
+    repo.save_event_impact(c.id, key, r.output.impact, "template" if r.used_fallback else r.provider)
+    repo.log(c.name, "Market event outlook drafted", user.name, f"{len(events)} relevant event(s); {'template' if r.used_fallback else r.provider}; display only", "Logged", "AI", client_id=c.id)
+    return True
 
 
 def external_data_is_stale(repo: Repo) -> bool:

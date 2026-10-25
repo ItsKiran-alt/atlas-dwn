@@ -291,6 +291,63 @@ def _perf(c) -> dict:
     return {"1Y": f"+{base:.1f}%", "3Y": f"+{base * 2.6:.1f}%", "5Y": f"+{base * 4.2:.1f}%"}
 
 
+def _event_chips(ev: dict) -> str:
+    return "".join(f'<span class="chip">{e(n)}</span> ' for n in ev["class_names"])
+
+
+def _outlook_html(store, c) -> str:
+    o = store.outlook
+    if not store.events:
+        return ""
+    if not o:
+        return '<p class="muted" style="margin:6px 0;font-size:12px">Preparing the outlook for this client…</p>'
+    how = "template, no AI" if o["provider"] == "template" else "AI-drafted (" + e(o["provider"]) + ")"
+    first = c.name.split(" ")[0]
+    return (f'<div style="background:#f4f7fb;border-left:4px solid #245b9d;padding:7px 11px;margin:8px 0;font-size:12px"><b>How this may affect {e(first)}</b> '
+            f'<span class="muted">({how}; a possibility for the RM to discuss, not a forecast)</span><div style="margin-top:3px">{e(o["text"])}</div></div>')
+
+
+def events_overview_block(store, c) -> str:
+    """Compact block inside the Overview AI Recommendation card."""
+    if not store._consent.get(c.id):
+        return ""
+    if not store.events:
+        return ('<div style="margin:10px 0;font-size:11px" class="muted"><b>Market events</b>: none of the latest interpreted headlines affects this client\'s holdings.</div>')
+    rows = "".join(f'<li><a href="{e(ev["link"])}" target="_blank" rel="noopener noreferrer">{e(ev["title"][:90])}</a> {_event_chips(ev)}<span class="muted">{ev["exposure"]:g}% of portfolio exposed</span></li>' for ev in store.events[:2])
+    more = f' <button class="btn small" onclick="openModal(\'eventModal\')">All {len(store.events)} events</button>' if len(store.events) > 2 else ""
+    return (f'<div style="margin:12px 0;font-size:11px"><b>Market events that may affect this client</b><ul style="padding-left:17px;margin:5px 0 0">{rows}</ul>{more}</div>' + _outlook_html(store, c))
+
+
+def events_tab_row(store, c) -> str:
+    n = len(store.events)
+    if not store._consent.get(c.id):
+        small = "Monitoring consent is not on file, so market events are not analysed for this client"
+    elif n:
+        small = f"{n} relevant event(s) for this client's holdings · highest exposure {max(ev['exposure'] for ev in store.events):g}%"
+    else:
+        small = "None of the latest interpreted headlines affects this client's holdings"
+    btn = '<button class="btn small" onclick="openModal(\'eventModal\')">Details</button>' if store._consent.get(c.id) else ""
+    return f'<div class="riskitem"><div><strong>Market event impact review</strong><small>{e(small)}</small></div>{btn}</div>'
+
+
+def event_modal(store, c) -> str:
+    if c is None or not store._consent.get(c.id):
+        return ""
+    body = []
+    for ev in store.events:
+        how = "keyword rules, no AI" if ev["provider"] == "template" else "AI-assisted (" + e(ev["provider"]) + ")"
+        body.append(f'<div class="riskitem" style="display:block"><div style="display:flex;justify-content:space-between;gap:10px"><strong><a href="{e(ev["link"])}" target="_blank" rel="noopener noreferrer">{e(ev["title"])}</a></strong>'
+                    f'<span class="chip {"red" if ev["relevance"] == "high" else "amber"}">{e(ev["relevance"].capitalize())} relevance</span></div>'
+                    f'<small>{e(ev["publisher"])} · {e(ev["label"])} · {how}</small><div style="margin-top:5px">{_event_chips(ev)}<span class="muted">{ev["exposure"]:g}% of {e(c.name.split(" ")[0])}\'s portfolio is in these asset classes</span></div>'
+                    f'<p style="margin:6px 0 2px"><b>What it says:</b> {e(ev["fact"])}</p>'
+                    + (f'<p style="margin:2px 0"><b>What it may mean</b> <span class="muted">(interpretation, not a forecast)</span>: {e(ev["interpretation"])}</p>' if ev["interpretation"] else "") + '</div>')
+    inner = "".join(body) or '<p class="muted">None of the latest interpreted headlines affects this client\'s holdings.</p>'
+    return (f'<div class="modalback" id="eventModal" role="dialog" aria-modal="true"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Market event impact review</div><h2>{e(c.name)}</h2></div>'
+            f'<button class="close" onclick="closeModal(\'eventModal\')" aria-label="Close">×</button></div><div class="modalbody">{_outlook_html(store, c)}<div class="risklist">{inner}</div>'
+            f'<div class="footnote">Display only: market events never change the tier or the proposal. Decision support for the RM, not a recommendation to trade.</div></div>'
+            f'<div class="modalfoot"><button class="btn" onclick="closeModal(\'eventModal\')">Close</button></div></div></div>')
+
+
 def workbench(store: Store, user: User, clients, client, view_state: dict) -> str:
     if not clients:
         return '<section class="view active" id="view-workbench"><div class="card"><h2>No clients assigned</h2></div></section>'
@@ -365,7 +422,7 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
     if est.available and est.returns:
         perf = {k: (f"{est.returns[k]:+.1f}%" if k in est.returns else "n/a") for k in ("1Y", "3Y", "5Y")}
     g0 = c.goals[0] if c.goals else None
-    recs_tab = f'''<div class="risklist" style="margin-top:13px"><div class="riskitem"><div><strong>{e(title if abs(drift_val) >= .5 else "Review " + c.issue.lower())}</strong><small>{e(CLASS_LABEL[drift_key])} {c.weights.get(drift_key, 0)}% vs target {c.plan.get(drift_key, 0)}% · {e(st if st != "Monitor" else "Monitor")}</small></div><button class="btn small primary" onclick="openReview()">Review</button></div><div class="riskitem"><div><strong>Market event impact review</strong><small>Market and event feeds are not connected yet; this item will use live data in a later phase</small></div><button class="btn small" onclick="act('detail',{{what:'market'}})">Details</button></div><div class="riskitem"><div><strong>{e(g0.name if g0 else "Goal")} check-in</strong><small>Goal is approximately {g0.progress if g0 else 0}% on track (illustrative)</small></div><button class="btn small" onclick="act('detail',{{what:'goal'}})">Details</button></div></div>'''
+    recs_tab = f'''<div class="risklist" style="margin-top:13px"><div class="riskitem"><div><strong>{e(title if abs(drift_val) >= .5 else "Review " + c.issue.lower())}</strong><small>{e(CLASS_LABEL[drift_key])} {c.weights.get(drift_key, 0)}% vs target {c.plan.get(drift_key, 0)}% · {e(st if st != "Monitor" else "Monitor")}</small></div><button class="btn small primary" onclick="openReview()">Review</button></div>{events_tab_row(store, c)}<div class="riskitem"><div><strong>{e(g0.name if g0 else "Goal")} check-in</strong><small>Goal is approximately {g0.progress if g0 else 0}% on track (illustrative)</small></div><button class="btn small" onclick="act('detail',{{what:'goal'}})">Details</button></div></div>'''
     from .recview import allocation_table as _alloc_tbl, trades_list as _trades_ul
     recs_tab += f'<div class="charttitle" style="margin-top:16px">Current status and new adjustment</div>{_alloc_tbl(c, pb)}<div class="charttitle" style="margin-top:12px">Proposed trades (nothing is executed)</div>{_trades_ul(pb)}'
     sub = view_state.get("subtab", "overview")
@@ -427,6 +484,7 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
           <p class="muted" style="font-size:12px;margin:0">{e(rec_text)}</p>
           {ai_chips}
           {ai_block or '<div style="background:#edf8f2;padding:11px;border-radius:8px;margin:12px 0;color:#23664c;font-size:11px"><b>Potential outcome (illustrative)</b><ul style="padding-left:17px;margin:6px 0 0"><li>Move closer to target allocation</li><li>Reduce unintended concentration in equity risk</li><li>Keep the long-term plan under review</li></ul><br>No monitoring run yet: press Run monitoring check for an evidence-based proposal.</div>'}
+          {events_overview_block(store, c)}
           <div class="actions"><button class="btn primary" onclick="openReview()">✎ Review & edit</button><button class="btn" onclick="openClientMessage()">▢ Draft client message</button><button class="btn" onclick="runAgent()">↻ Run monitoring check</button></div>
           <div class="workflow"><div class="step current"><b>1 · RM review</b><span class="{step1[1]}" id="step1status">{step1[0]}</span></div><div class="step"><b>2 · Policy checks</b>{step2}</div><div class="step"><b>3 · Client consent</b><span class="{c3[1]}" id="step3status">{e(c3[0])}</span></div><div class="step"><b>4 · Execution</b><span class="muted">Locked</span></div></div>
           <div class="footnote">{foot}</div>
@@ -597,6 +655,52 @@ def _news_row(n) -> str:
             f'<small>{e(n.publisher)} · published {when} · retrieved {_fmt_dt(n.retrieved_at)}</small></div><span class="pill">Official source</span></div>')
 
 
+def _interpreter_card(store) -> str:
+    """Market event interpreter: what each headline says, what it may mean, and which of the RM's clients hold the affected asset classes."""
+    labels = {"rates_monetary": "Interest rates / monetary policy", "labour_inflation_data": "Jobs and inflation data",
+              "regulatory_enforcement": "Regulation / enforcement", "market_structure": "Market structure", "other": "Other"}
+    names = {"EQ": "Equities", "FI": "Bonds", "AL": "Alternatives", "CA": "Cash", "SS": "Single stock"}
+    rank = {"high": 0, "medium": 1, "low": 2}
+    rows = [(n, store.interp[n.guid_hash]) for n in store.news if n.guid_hash in store.interp]
+    head = ('<div class="cardhead"><div><h2>Market event interpreter</h2><div class="sub">Reads each new headline, says what it means for portfolios, and shows which of your clients are exposed. '
+            'Runs automatically after every data refresh.</div></div><span class="pill">Decision support</span></div>')
+    if not rows:
+        return ('<div class="card" style="margin-top:15px">' + head + '<p class="muted">No headlines have been interpreted yet. They are interpreted automatically when data is refreshed: use Refresh data.</p></div>')
+    relevant = sorted([x for x in rows if x[1]["relevance"] in ("high", "medium")], key=lambda x: rank[x[1]["relevance"]])
+    quiet = len(rows) - len(relevant)
+    consented = [c for c in store.clients_by_id.values() if store.has_active_consent(c.id)]
+    paused = len(store.clients_by_id) - len(consented)
+    out = []
+    for n, it in relevant:
+        classes = [k for k in it["classes"] if k in names]
+        chips = "".join(f'<span class="chip">{names[k]}</span> ' for k in classes)
+        exposed = []
+        for c in consented:
+            share = sum(c.weights.get(k, 0) for k in classes if k in ("EQ", "FI", "AL", "CA"))
+            if share > 0:
+                exposed.append((share, c))
+        exposed.sort(key=lambda x: (-x[0], x[1].name))
+        def chip(share, c):
+            return f'<button class="chip" onclick="selectClient(\'{c.id}\', false, \'workbench\')" title="Open {e(c.name)}">{e(c.name)} · {share:g}%</button> '
+        shown = "".join(chip(s_, c_) for s_, c_ in exposed[:8])
+        more = (f'<span class="morechips hidden">{"".join(chip(s_, c_) for s_, c_ in exposed[8:])}</span>'
+                f'<button class="chip" data-label="+{len(exposed) - 8} more" onclick="toggleMore(this)">+{len(exposed) - 8} more</button>') if len(exposed) > 8 else ""
+        who = (f'<div style="margin-top:6px"><b style="font-size:12px">Clients affected ({len(exposed)})</b> <span class="muted" style="font-size:11px">share of portfolio in the affected asset classes</span><div style="margin-top:4px">{shown}{more}</div></div>'
+               if exposed else '<div class="muted" style="margin-top:6px;font-size:12px">None of your clients with monitoring consent holds the affected asset classes.</div>')
+        how = "AI-assisted (" + e(it["provider"]) + ")" if it["provider"] != "template" else "keyword rules, no AI"
+        out.append(f'<div class="riskitem" style="display:block"><div style="display:flex;justify-content:space-between;gap:10px"><strong><a href="{e(n.link)}" target="_blank" rel="noopener noreferrer">{e(n.title)}</a></strong>'
+                   f'<span class="chip {"red" if it["relevance"] == "high" else "amber"}">{e(it["relevance"].capitalize())} relevance</span></div>'
+                   f'<small>{e(n.publisher)} · {e(labels.get(it["event_type"], "Other"))} · {how}</small>'
+                   f'<div style="margin-top:5px">{chips}</div>'
+                   f'<p style="margin:6px 0 2px"><b>What it says:</b> {e(it["fact"])}</p>'
+                   + (f'<p style="margin:2px 0"><b>What it may mean</b> <span class="muted">(interpretation, not a forecast)</span>: {e(it["interpretation"])}</p>' if it["interpretation"] else "")
+                   + who + '</div>')
+    note = (f'<div class="footnote">{quiet} other headline(s) were judged not relevant to portfolios. ' if quiet else '<div class="footnote">')
+    note += (f'{paused} client(s) without monitoring consent are not included. ' if paused else "") + "Interpretation is decision support for the RM, not a recommendation to trade.</div>"
+    body = "".join(out) or '<p class="muted">None of the latest headlines is relevant to portfolios.</p>'
+    return '<div class="card" style="margin-top:15px">' + head + f'<div class="risklist">{body}</div>' + note + '</div>'
+
+
 def research(store) -> str:
     rows = "".join(_quote_row(q) for q in store.market)
     news = "".join(_news_row(n) for n in store.news) or '<p class="muted">No headlines retrieved yet. Use Refresh data.</p>'
@@ -606,7 +710,7 @@ def research(store) -> str:
 <div class="card" style="margin-bottom:15px"><div class="cardhead"><div><h2>Market snapshot</h2><div class="sub">Real prices with exchange timestamps. Nothing is shown as current unless it passed the freshness check.</div></div><span class="pill">Live data</span></div><div class="tablewrap"><table><thead><tr><th>Instrument</th><th>Last</th><th>Change</th><th>As of (UTC)</th><th>Status</th><th>Source</th></tr></thead><tbody>{rows}</tbody></table></div><div class="footnote">Change = price minus the previous session close, computed by the platform. Prices marked stale or unavailable are never used for current-market statements. Yahoo Finance is an unofficial source; see Data sources below.</div></div>
 <div class="twocol"><div class="card"><div class="cardhead"><h2>Headlines from official sources</h2><span class="pill">Fed · SEC · BLS</span></div><div class="risklist">{news}</div><div class="footnote">Headlines are information, not instructions. Each item links to its publisher; a publication time is shown where the feed gives one.</div></div>
 <div class="card"><div class="cardhead"><h2>Data sources status</h2><span class="pill">Live</span></div><div class="risklist">{srcs}</div></div></div>
-<div class="card" style="margin-top:15px"><h2>Market event interpreter</h2><p class="muted">When a market or news event is relevant to a client, the system will link it to the client's holdings, run deterministic scenarios and draft an explanation for adviser review.</p><div class="calloutnote">Interpretation and scenarios are added in the next build phase. Until then this page only reports retrieved facts with their sources and ages; it makes no forecasts and no recommendations.</div></div></section>'''
+{_interpreter_card(store)}</section>'''
 
 
 def _source_detail(s: dict) -> str:
@@ -757,6 +861,7 @@ def modals(store: Store, user: User, c, readonly: bool) -> str:
     return f'''<div class="modalback" id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="reviewTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">AI recommendation · {e(rec.status)}</div><h2 id="reviewTitle">Review & edit recommendation</h2></div><button class="close" onclick="closeModal('reviewModal')" aria-label="Close">×</button></div><div class="modalbody"><div class="notice">This is a fictional scenario. No order will be placed. A recommendation must pass applicable policy, suitability, consent and approval checks before any authorised action.{" Read-only: only a Relationship Manager can record a decision." if readonly else ""}</div><div class="twocol"><div class="field"><label>Client</label><input value="{e(c.name)}" readonly></div><div class="field"><label>Approval tier</label><select id="approvalTier"{" disabled" if readonly else ""}>{tier_opts}</select></div></div><div class="twocol"><div class="field"><label>Current equity allocation</label><input value="{c.weights.get("EQ", 0)}%" readonly></div><div class="field"><label>Target equity allocation</label><input id="targetEquity" type="number" min="0" max="100" value="{eq_plan}"{ro}></div></div><div class="field"><label>AI rationale (editable)</label><textarea id="rationale"{ro}>{e(rec.rationale or rat)}</textarea></div><div class="field"><label>RM review note (required to record decision)</label><textarea id="rmNote" placeholder="Add rationale for approval, edit or rejection…"{ro}>{e(rec.note)}</textarea></div>{evid}<div class="field"><label>Decision</label><select id="decision"{" disabled" if readonly else ""}><option value="approve">Approve draft for next workflow step</option><option value="edit">Save edits for further review</option><option value="reject">Reject recommendation</option></select></div>{"" if readonly else '<div class="field"><label><input type="checkbox" id="convoHeld"> I have spoken with the client (required to approve a Tier 3 item)</label></div>'}<div class="checkrow"><span class="checkmark">✓</span><span>AI output labelled as draft</span><span class="right pass">Yes</span></div><div class="checkrow"><span class="checkmark {"" if consent_ok else "pending"}">{"✓" if consent_ok else "!"}</span><span>Monitoring consent on file</span><span class="right {"pass" if consent_ok else "pending"}">{"Yes" if consent_ok else "No — required"}</span></div><div class="checkrow"><span class="checkmark pending">!</span><span>Client consent for execution</span><span class="right {"pass" if _c3[1] == "good" else ("pending" if _c3[1] == "warn" else "")}">{_c3[0]}</span></div></div><div class="modalfoot">{foot}</div></div></div>
 {_ask_modal()}
 {_report_modal()}
+{event_modal(store, c)}
 <div class="modalback" id="messageModal" role="dialog" aria-modal="true" aria-labelledby="messageTitle"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Client View · RM-gated</div><h2 id="messageTitle">Draft client message</h2></div><button class="close" onclick="closeModal('messageModal')">×</button></div><div class="modalbody"><div class="notice">This creates a draft only. It will not be sent from this prototype.</div><div class="field"><label>Subject</label><input id="messageSubject" value="{e(draft["subject"])}"></div><div class="field"><label>Message</label><textarea id="messageBody">{e(draft["body"])}</textarea></div></div><div class="modalfoot"><button class="btn" onclick="closeModal('messageModal')">Close draft</button><button class="btn primary" onclick="markDraftReady()">Mark ready for RM review</button></div></div></div>
 <div class="modalback" id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notesTitle"><div class="modal"><div class="modalhead"><h2 id="notesTitle">Add adviser note</h2><button class="close" onclick="closeModal('notesModal')">×</button></div><div class="modalbody"><div class="field"><label>Note</label><textarea id="noteText" placeholder="Enter a factual client note…"></textarea></div><div class="footnote">Notes are treated as untrusted text: instruction-like content is quarantined by the control layer (added with the agents).</div></div><div class="modalfoot"><button class="btn" onclick="closeModal('notesModal')">Cancel</button><button class="btn primary" onclick="saveNote()">Save note</button></div></div></div>
 <div class="modalback" id="crmModal" role="dialog" aria-modal="true"><div class="modal"><div class="modalhead"><div><div class="eyebrow">Salesforce CRM · simulated · read-only</div><h2>CRM record · {e(c.name)}</h2></div><button class="close" onclick="closeModal('crmModal')">×</button></div><div class="modalbody"><div class="tablewrap"><table><tbody><tr><th>Client ID</th><td>{e(c.id)}</td></tr><tr><th>Email</th><td>{e(c.email)}</td></tr><tr><th>Relationship manager</th><td>{e(rm_name)}</td></tr><tr><th>Service tier</th><td>{c.tier}</td></tr><tr><th>Client since</th><td>{c.since}</td></tr><tr><th>Risk profile (CRM)</th><td>{e(c.risk_profile)}</td></tr><tr><th>Communication preference</th><td>{e(c.contact_pref)}</td></tr></tbody></table></div><div class="calloutnote">Data comes from the simulated Salesforce connector. Atlas reads CRM data and never writes back to it.</div></div><div class="modalfoot"><button class="btn" onclick="closeModal('crmModal')">Close</button></div></div></div>

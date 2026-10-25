@@ -352,6 +352,50 @@ class ChatReplyDrafter:
                                 f"Kind regards,\n{i['rm_name']}"))
 
 
+# =============================================================== 6. Client event outlook
+class EventOutlook(BaseModel):
+    impact: str = Field(max_length=900)
+
+
+_NEG_FORECAST = re.compile(r"\bwill (definitely |certainly )?(fall|drop|decline|lose|crash|suffer|decrease|worsen|shrink|slump)\b|\bgoing to\b|\b(is|are) expected to\b|\bbound to\b", re.I)
+_HEDGE = re.compile(r"\b(could|may|might|can)\b", re.I)
+
+
+class ClientEventOutlook:
+    """A short, scenario-style note for the RM: how the relevant market events could matter for ONE client. Not a forecast."""
+    name = "client_event_outlook"
+    system = ('Task: write 2 to 4 plain sentences for the relationship manager on how the listed market events COULD matter for this client, '
+              'using ONLY the RECORDS (exposure, goals, risk profile). Use hedged words such as could, may or might. Describe sensitivity and what to discuss. '
+              'Do NOT predict outcomes, do NOT give numbers that are not in RECORDS, do NOT advise a trade. JSON: {"impact": str}.')
+
+    def user(self, i: dict) -> str:
+        recs = "\n".join(f"[{k}] {v}" for k, v in i["records"].items())
+        return "RECORDS:\n" + recs + f"\n\nClient first name: {i['first_name']}"
+
+    def validate(self, raw: dict, i: dict) -> EventOutlook:
+        o = EventOutlook(**raw)
+        if not o.impact.strip():
+            raise SkillRejected("empty outlook")
+        if prohibited_language(o.impact) or _NEG_FORECAST.search(o.impact):
+            raise SkillRejected("forecast or promise language")
+        if not _HEDGE.search(o.impact):
+            raise SkillRejected("not hedged")
+        bad = untraceable_figures(o.impact, {"records": list(i["records"].values())})
+        if bad:
+            raise SkillRejected("untraceable figures: " + ", ".join(bad[:4]))
+        return o
+
+    def fallback(self, i: dict) -> EventOutlook:
+        evs = i["events"]
+        names = sorted({n for e in evs for n in e["class_names"]})
+        top = max(evs, key=lambda e: e["exposure"])
+        goals = ", ".join(i["goals"][:2])
+        return EventOutlook(impact=(
+            f"The latest relevant developments mainly concern {', '.join(names).lower()}. {i['first_name']} holds {top['exposure']:g}% of the portfolio in the most exposed asset classes, "
+            f"so the portfolio could be sensitive to news in this area. This is a possibility to talk through, not a forecast"
+            + (f"; it is worth checking against {i['first_name']}'s goals ({goals}) at the next conversation." if goals else ".")))
+
+
 # =============================================================== 4. RM Copilot
 class Copilot:
     name = "copilot"
