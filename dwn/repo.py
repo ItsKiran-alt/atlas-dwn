@@ -248,6 +248,12 @@ class Repo:
     def notes_for(self, client_id: str) -> list[tuple]:
         return [(r.client_id, r.text, r.author, fmt_ts(r.ts)) for r in self.s.scalars(select(M.NoteRow).where(M.NoteRow.client_id == client_id).order_by(M.NoteRow.id))]
 
+    def latest_note_text(self, client_id: str, max_age_days: int = 90) -> str:
+        """The client's most recent adviser note, if it is recent enough to still be relevant. Empty string when there is none."""
+        since = utcnow() - timedelta(days=max_age_days)
+        r = self.s.scalar(select(M.NoteRow).where(M.NoteRow.client_id == client_id, M.NoteRow.ts >= since).order_by(M.NoteRow.id.desc()).limit(1))
+        return r.text if r else ""
+
     def get_draft(self, client_id: str) -> dict | None:
         r = self.s.get(M.DraftRow, client_id)
         return dict(subject=r.subject, body=r.body, status=r.status) if r else None

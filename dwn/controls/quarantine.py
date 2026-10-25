@@ -9,7 +9,8 @@ from __future__ import annotations
 import re
 
 INJECTION_PATTERNS = [
-    r"ignore (all|any|previous|prior) (rules|instructions)",
+    r"ignore (all |any |your |the |these |those |previous |prior )*(rules|instructions|polic(y|ies)|controls|guardrails)",
+    r"\b(approve|execute|place|sell|buy|transfer) (all|every|any) (trades?|orders?|transfers?|positions?)\b",
     r"system (note|prompt|message)\b.*\b(ai|assistant|model)",
     r"\b(assistant|ai)\s*[:,]\s*(transfer|sell|buy|approve|send|disable)",
     r"disregard .*(polic|rule|control)",

@@ -301,10 +301,9 @@ def _outlook_html(store, c) -> str:
         return ""
     if not o:
         return '<p class="muted" style="margin:6px 0;font-size:12px">Preparing the outlook for this client…</p>'
-    how = "template, no AI" if o["provider"] == "template" else "AI-drafted (" + e(o["provider"]) + ")"
     first = c.name.split(" ")[0]
     return (f'<div style="background:#f4f7fb;border-left:4px solid #245b9d;padding:7px 11px;margin:8px 0;font-size:12px"><b>How this may affect {e(first)}</b> '
-            f'<span class="muted">({how}; a possibility for the RM to discuss, not a forecast)</span><div style="margin-top:3px">{e(o["text"])}</div></div>')
+            f'<span class="muted">(a possibility for the RM to discuss, not a forecast)</span><div style="margin-top:3px">{e(o["text"])}</div></div>')
 
 
 def events_overview_block(store, c) -> str:
@@ -335,10 +334,9 @@ def event_modal(store, c) -> str:
         return ""
     body = []
     for ev in store.events:
-        how = "keyword rules, no AI" if ev["provider"] == "template" else "AI-assisted (" + e(ev["provider"]) + ")"
         body.append(f'<div class="riskitem" style="display:block"><div style="display:flex;justify-content:space-between;gap:10px"><strong><a href="{e(ev["link"])}" target="_blank" rel="noopener noreferrer">{e(ev["title"])}</a></strong>'
                     f'<span class="chip {"red" if ev["relevance"] == "high" else "amber"}">{e(ev["relevance"].capitalize())} relevance</span></div>'
-                    f'<small>{e(ev["publisher"])} · {e(ev["label"])} · {how}</small><div style="margin-top:5px">{_event_chips(ev)}<span class="muted">{ev["exposure"]:g}% of {e(c.name.split(" ")[0])}\'s portfolio is in these asset classes</span></div>'
+                    f'<small>{e(ev["publisher"])} · {e(ev["label"])}</small><div style="margin-top:5px">{_event_chips(ev)}<span class="muted">{ev["exposure"]:g}% of {e(c.name.split(" ")[0])}\'s portfolio is in these asset classes</span></div>'
                     f'<p style="margin:6px 0 2px"><b>What it says:</b> {e(ev["fact"])}</p>'
                     + (f'<p style="margin:2px 0"><b>What it may mean</b> <span class="muted">(interpretation, not a forecast)</span>: {e(ev["interpretation"])}</p>' if ev["interpretation"] else "") + '</div>')
     inner = "".join(body) or '<p class="muted">None of the latest interpreted headlines affects this client\'s holdings.</p>'
@@ -449,7 +447,7 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
     </section>
     <section class="detail">
       <div class="card">
-        <div class="cardhead" style="margin-bottom:14px"><div class="clienthero"><div class="avatar" id="heroAvatar">{initials(c.name)}</div><div><h2 id="heroName">{e(c.name)} <span class="tier">{c.tier}</span></h2><div class="meta">Client since {c.since} &nbsp; | &nbsp; AUM <b id="heroAum">{money_m(c.aum_musd)}</b></div></div></div><div class="actions"><button class="btn small primary" id="heroRunNow" data-access="rm" onclick="runClientNow()">▶ Run now</button><button class="btn small" onclick="viewReport(\'client_review\', \'{c.id}\')">▤ Report</button><button class="btn small" onclick="openCrm()">View in CRM ↗</button><button class="btn primary small" data-access="rm" onclick="setView('clientview')">Client View →</button></div></div>
+        <div class="cardhead" style="margin-bottom:14px"><div class="clienthero"><div class="avatar" id="heroAvatar">{initials(c.name)}</div><div><h2 id="heroName">{e(c.name)}</h2><div class="meta">Client since {c.since} &nbsp; | &nbsp; AUM <b id="heroAum">{money_m(c.aum_musd)}</b></div></div></div><div class="actions"><button class="btn small primary" id="heroRunNow" data-access="rm" onclick="runClientNow()">▶ Run now</button><button class="btn small" onclick="viewReport(\'client_review\', \'{c.id}\')">▤ Report</button><button class="btn small" onclick="openCrm()">View in CRM ↗</button><button class="btn primary small" data-access="rm" onclick="setView('clientview')">Client View →</button></div></div>
         <div class="section-tabs">{T("overview","Overview")}{T("recommendations","AI Recommendations (3)")}{T("portfolio","Portfolio")}{T("goals","Goals")}{T("risk","Risk & Suitability")}{T("activity","Activity & Notes")}</div>
         <div class="subview{S("overview")}" id="sub-overview"><div class="summarygrid" style="margin-top:13px">
           <div class="summary"><div class="label">Portfolio value</div><strong id="summaryAum">{money_m(c.aum_musd)}</strong><small class="good">↑ {6.3 if c.name == "Rajesh Menon" else 3 + _h(c.id, "q") % 70 / 10:.1f}% vs. 3 months ago</small></div>
@@ -687,10 +685,9 @@ def _interpreter_card(store) -> str:
                 f'<button class="chip" data-label="+{len(exposed) - 8} more" onclick="toggleMore(this)">+{len(exposed) - 8} more</button>') if len(exposed) > 8 else ""
         who = (f'<div style="margin-top:6px"><b style="font-size:12px">Clients affected ({len(exposed)})</b> <span class="muted" style="font-size:11px">share of portfolio in the affected asset classes</span><div style="margin-top:4px">{shown}{more}</div></div>'
                if exposed else '<div class="muted" style="margin-top:6px;font-size:12px">None of your clients with monitoring consent holds the affected asset classes.</div>')
-        how = "AI-assisted (" + e(it["provider"]) + ")" if it["provider"] != "template" else "keyword rules, no AI"
         out.append(f'<div class="riskitem" style="display:block"><div style="display:flex;justify-content:space-between;gap:10px"><strong><a href="{e(n.link)}" target="_blank" rel="noopener noreferrer">{e(n.title)}</a></strong>'
                    f'<span class="chip {"red" if it["relevance"] == "high" else "amber"}">{e(it["relevance"].capitalize())} relevance</span></div>'
-                   f'<small>{e(n.publisher)} · {e(labels.get(it["event_type"], "Other"))} · {how}</small>'
+                   f'<small>{e(n.publisher)} · {e(labels.get(it["event_type"], "Other"))}</small>'
                    f'<div style="margin-top:5px">{chips}</div>'
                    f'<p style="margin:6px 0 2px"><b>What it says:</b> {e(it["fact"])}</p>'
                    + (f'<p style="margin:2px 0"><b>What it may mean</b> <span class="muted">(interpretation, not a forecast)</span>: {e(it["interpretation"])}</p>' if it["interpretation"] else "")

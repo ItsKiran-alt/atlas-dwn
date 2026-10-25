@@ -172,6 +172,12 @@ def run_monitoring(repo: Repo, user: User, client_id: str, *, event: EventInput 
     market_info: dict = {}
     if event is None:
         event, market_info = build_market_event(repo, policy)
+        # the RM's latest adviser note (last 90 days) is read like any other input: only for consented clients, and only when this run covers goal progress.
+        # It is untrusted text: the gates below quarantine instruction-like text, and a life-event signal is a SUGGESTION the RM must confirm.
+        if (S is None or "Goal progress" in S) and repo.has_active_consent(client_id):
+            note = repo.latest_note_text(client_id)
+            if note:
+                event = event.model_copy(update=dict(note_text=note))
 
     # duplicate-run protection (also used by the scheduler): same inputs within the window reuse the earlier run
     ihash = _hash(profile, event, policy) if profile else hashlib.sha256(f"{client_id}|noprofile|{json.dumps(missing)}".encode()).hexdigest()
@@ -398,6 +404,8 @@ def _compose(p: ClientProfile, a: Analysis, trades, facts, draft, scen, news_ctx
     requires = []
     if ev.signal and ev.signal.certainty == "confirmed":
         requires.append("RM must confirm the life-event signal from the adviser note before it is used; the client profile has NOT been changed.")
+    elif ev.signal and ev.signal.certainty == "possible" and extraction and extraction.relevant:
+        requires.append(f'The adviser note mentions a possible life event ("{extraction.evidence_quote[:120]}"). It has NOT been used to change the analysis; confirm it with the client first.')
     if needs_input:
         requires.append("RM must supply: " + ", ".join(needs_input) + ".")
     if "profile_conflict" in a.flags:

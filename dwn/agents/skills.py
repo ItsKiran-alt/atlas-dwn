@@ -176,6 +176,10 @@ class NotesExtractor:
             return NotesExtraction(relevant=True, certainty="confirmed", new_goal_topic="education fund", evidence_quote=quote,
                                    needs_rm_input=["goal target amount", "years to goal", "share of portfolio funding the goal"],
                                    summary="New child; an education goal is suggested. The note gives no amounts, so the RM must supply them.")
+        if re.search(r"\b(daughter|son|child|children|kids?)\b", low) and re.search(r"\b(university|college|tuition|school fees|study(ing)? abroad)\b", low):
+            return NotesExtraction(relevant=True, certainty="confirmed", new_goal_topic="education fund", evidence_quote=quote,
+                                   needs_rm_input=["goal target amount", "years to goal", "share of portfolio funding the goal"],
+                                   summary="A child's university plans; an education goal is suggested. The RM must supply the goal amounts.")
         if re.search(r"closing on a house|home purchase|buying a house|deposit", low) and amt:
             return NotesExtraction(relevant=True, certainty="confirmed", outflow=amt, evidence_quote=quote, summary="Home purchase needs cash soon.")
         if re.search(r"sale of the company|sold the company|business sale|proceeds", low) and amt:
