@@ -193,7 +193,7 @@ def messages_page(store, user, clients, selected) -> str:
         thread = '<p class="muted">Select a client to see the conversation.</p>'
     return (f'<section class="view" id="view-messages"><div class="pagehead"><div><div class="eyebrow">Client communication</div><h1>Messages</h1>'
             f'<div class="sub">Secure conversations with your clients. New client messages appear here.</div></div></div>'
-            f'<div class="workgrid"><section class="card"><div class="cardhead"><h2>Conversations</h2></div><div class="queue">{rows or "<p class=muted>No clients.</p>"}</div></section>'
+            f'<div class="workgrid fitqueue"><section class="card queuecard"><div class="cardhead"><h2>Conversations</h2></div><div class="queue">{rows or "<p class=muted>No clients.</p>"}</div></section>'
             f'<section class="card">{thread}</section></div></section>')
 
 
@@ -437,8 +437,8 @@ def workbench(store: Store, user: User, clients, client, view_state: dict) -> st
     <div class="metric clickable" role="button" tabindex="0" title="Show clients without consent" onclick="jumpQueue('consent')"><div class="bubble" style="background:#e8f7ef">▤</div><div><strong id="consentCount">{n_consent}</strong><span>Consent pending</span></div></div>
     <div class="metric clickable" role="button" tabindex="0" title="Open tasks" onclick="setView('tasks')"><div class="bubble" style="background:#e8f7ef">✓</div><div><strong>0</strong><span>Open compliance issues</span></div></div>
   </div>
-  <div class="workgrid">
-    <section class="card">
+  <div class="workgrid fitqueue">
+    <section class="card queuecard">
       <div class="cardhead"><h2>Client Queue</h2><button class="btn small" onclick="toggleFilters()">⚑ Filters</button></div>
       <div class="clientfilters" id="queueFilters"><button class="chip selected" onclick="filterQueue('all',this)">All ({kinds_all})</button><button class="chip" onclick="filterQueue('review',this)">Needs attention ({n_attn})</button><button class="chip" onclick="filterQueue('approval',this)">Awaiting approval ({n_appr})</button><button class="chip" onclick="filterQueue('consent',this)">Consent pending ({n_consent})</button></div>
       <div class="field hidden" id="filterSearch"><input id="queueSearch" placeholder="Filter by client name…" oninput="searchQueue()"></div>

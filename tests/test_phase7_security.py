@@ -96,7 +96,7 @@ def test_malicious_adviser_note_and_draft_are_escaped(repo, payload):
 def test_malicious_news_and_llm_output_are_escaped(repo):
     from dwn.data.news import NewsService
     body = ("<?xml version='1.0'?><rss version='2.0'><channel><item><title>&lt;script&gt;alert(1)&lt;/script&gt;Rates held</title>"
-            "<link>https://www.federalreserve.gov/x1</link><pubDate>Mon, 19 Oct 2026 14:00:00 GMT</pubDate>"
+            "<link>https://www.federalreserve.gov/x1</link><pubDate>" + utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT") + "</pubDate>"
             "<description>&lt;img src=x onerror=alert(1)&gt;details</description></item></channel></rss>").encode()
     items, _ = parse_feed(body, FEEDS[0], utcnow())
     assert "<" not in items[0].title and "<" not in items[0].summary                         # tags are stripped at ingestion

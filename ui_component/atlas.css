@@ -22,3 +22,16 @@ body[data-role="Client"] .clientbar .userchip{display:flex!important}
 .notifwrap{position:relative}.notifpanel{display:none;position:absolute;right:0;top:46px;width:340px;max-height:380px;overflow-y:auto;background:#fff;color:#10233f;border-radius:10px;box-shadow:0 10px 30px #10284440;z-index:50;text-align:left}
 .notifpanel.open{display:block}.notifhead{padding:10px 14px;border-bottom:1px solid #dce5f2}.notifitem{padding:10px 14px;border-bottom:1px solid #eef3fb}.notifitem.unread{background:#f3f8ff}.notifitem p{margin:3px 0;font-size:12px}.notifitem small{color:#5d6f88}
 .msgactions{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* additions: on the RM Workbench and Messages pages the page ends where the right-hand panel ends; the list scrolls inside its own panel */
+@media(min-width:851px){
+  .workgrid.fitqueue>.queuecard{align-self:stretch;height:0;min-height:max(100%,480px);display:flex;flex-direction:column;overflow:hidden}
+  .workgrid.fitqueue>.queuecard .queue{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+  .workgrid.fitqueue>.queuecard .queue::-webkit-scrollbar{width:7px}
+  .workgrid.fitqueue>.queuecard .queue::-webkit-scrollbar-thumb{background:#c5d3e6;border-radius:6px}
+}
+@media(min-width:851px){
+  /* Messages: the conversation panel stretches to the same bottom line as the list; long conversations scroll inside it */
+  #view-messages .workgrid.fitqueue>.card:not(.queuecard){align-self:stretch;display:flex;flex-direction:column}
+  #view-messages .workgrid.fitqueue>.card:not(.queuecard) .chatlog{flex:1 1 0;height:0;min-height:220px;max-height:none}
+}
